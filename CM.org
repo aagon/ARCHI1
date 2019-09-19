@@ -1,0 +1,743 @@
+#+TITLE : Prise de notes CM 4I100 ARCHI1
+#+PROPERTY: header-args :mkdirp yes
+#+STARTUP: inlineimages
+
+Pirouz Bazargan-Sabet (pirouz.bazargan-sabet@lip6.fr)
+partagé avec :
+Karine Haydeman (karine.haydeman@lip6.fr)
+
+4I100
+
+* Informations pratiques
+
+1 cours par semaine
+
+1 TD de 4h (pas de machine)
+
+3 parties distinctes :
+- Processeurs
+- Optimisation de code (Karine)
+- Mémoire (organisation matérielle)
+
+Deux examens répartis :
+
+Examen réparti 1 (40%) : Processeurs et début de optimisation de code
+Examen réparti 2 (60%) : Tout
+
+Droit à tous les documents sous forme imprimée.
+
+Pas de questions de cours ni de TD. On demande d'aller au-delà.
+
+Annales disponibles, sans les corrigés.
+
+UE réputée difficile, réputation imméritée. Moyenne des examens est autour de 8,5. 30% seulement réussissent en validation simple.
+SESI obligatoire, SAR, RES, SFPN sont présents.
+
+Support de cours apparemment compilé par les étudiants de ALIAS.
+
+* Cours 0 : 18/09/2019
+
+Architecture et réalisation sont indépendants.
+
+#+BEGIN_DEFINITION
+Architecture concerne tous les aspects visibles de l'objet pour l'utilisateur. Tout ce que l'utilisateur doit connaître pour pouvoir en user.
+#+END_DEFINITION
+
+Qui est l'utilisateur dans le cas d'un processeur ?
+[les processus]
+
+
+#+BEGIN_DEFINITION
+Réalisation concerne tous les aspects qu'on doit traiter pour concevoir l'objet.
+#+END_DEFINITION
+
+On doit être capable de concevoir les processeurs à la fin de l'UE.
+
+Dans le cas des processeurs RISC, on ne peut pas parler d'architecture sans parler de réalisation (enfreinte de la règle plus haut).
+
+
+Architecture représente 4 points (ce qu'un programmeur doit savoir du processeur pour écrire un programme en assembleur) :
+- Registres visibles du logiciel
+- Jeu d'instruction du processeur
+- Comment le processeur voit la mémoire (l'abstraction de la mémoire vue du processeur)
+- Mécanismes d'interruptions et reset
+
+
+On va étudier le processeur MIPS-32.
+
+Rupture de l'année 1980 (MIPS-32 et RISC 1) : conçues à Stanford et Berkeley respectivement.
+
+Avant 1980 : Complex Instruction Set Computer (CISC)
+Après 1980 : *Reduced* Instruction Set Computer (RISC)
+
+** Registres de MIPS-32
+
+*** Registres visibles
+
+#+BEGIN_DEFINITION
+Registre visible du logiciel.
+Registre manipulable (lire ou écrire) avec une instruction assembleur
+#+END_DEFINITION
+
+Il y a 32 registres entiers visibles dans le MIPS-32
+R0 à R31.
+
+Chaque registre peut contenir 32 bits, soit un entiers.
+
+Aucune différence de permission entre ces registres, sauf R0 et R31.
+
+R0 est le Trash Register \to pas vraiment un registre, c'est la constante 0. Il n'est pas modifiable
+
+R31 est le Link Register. Permet d'enregistrer une adresse, l'adresse de retour de la fonction. On peut écrire dessus, même si c'est imprudent.
+
+Ces registres sont indexés
+
+*** Registres spéciaux
+
+Deux registres nommés LO et HI (32 bits chacun), utilisés seulement pour l'opération * et /.
+
+Le résultat d'une multiplication de deux entiers écrits sur 32 bits doit pouvoir s'écrire sur 64 bits maximum (preuve à refaire). Les deux registres mis bout-à-bout (HI puis LO) donnent le résultat.
+
+Le résultat d'une division de deux entiers écrits sur 32 bits doit pouvoir s'écrire sur 32 : HI le reste, LO le quotient.
+
+#+BEGIN_DEFINITION
+Coprocesseur
+Matériel dédié à un type d'opération particulière.
+#+END_DEFINITION
+
+Coprocesseur 0 gère le système d'exploitation. A besoin pour cela d'un certain nombre de registres (tous en 32 bits) qui lui sont réservées :
+STATUS : Quelle est le mode de fonctionnement du processeur (USER ou KERNEL)
+CAUSE : enregistre la cause de l'interruption ou de l'exception
+EPC (EXCEPTION PROGRAM COUNTER) : adresse de l'instruction fautive
+EBASE : Adresse du système d'exploitation dans la mémoire
+BADVADDR : L'adresse (virtuelle) à laquelle le processeur voulait accéder avant erreur. Ne correspond pas forcément à une adresse physique de la machine.
+
+** Jeu d'instruction
+
+#+BEGIN_DEFINITION
+Le langage assembleur n'utilise que le jeu d'instruction du processeur. Manipulé et écrit des humains. 
+
+Le langage machine est en binaire. Manipulé par le processeur.
+
+On a une traduction exacte et bijective entre le langage d'assemblage et le langage machine.
+
+Un outil très simple permet de passer de l'un à l'autre, dans les deux sens.
+#+END_DEFINITION
+
+#+BEGIN_SRC asm
+  add R3, R4, R5
+#+END_SRC
+
+Ici, l'instruction donne : "écrit dans R3 (la cible) la somme de R4 et R5".
+
+*** Le langage machine
+
+Dans le cas de RISC :
+
+Toutes les instructions font la même taille : de cette manière, je sais où elles commencent et où elles s'arrêtent.
+
+#+BEGIN_DEFINITION
+Format d'instruction
+
+Où je regarde dans les 32 bits pour trouver quelle ou quelle partie de l'instruction (où est la commande, où est la source 1, la source 2, la destination, etc... ?)
+#+END_DEFINITION
+
+On a trois formats dans un processeur MIPS-32 :
+
+**** Le format régulier (R)
+
+Dans un format régulier (R), on a :
+- Un opcode : Code de l'opération qu'on veut faire, codée sur 6 bits, donc 2^6 opérations différentes (= 64). Innovation de RISC : permettre moins d'opérations.
+- Le numéro du registre source Rs
+- Le numéro du registre source Rs
+- Le numéro du registre source Rs
+- Le décalage éventuel
+- Func, un complément du opcode
+
+| Opcode | R_s | R_t | R_d | Shift Amount | Func |
+|      6 |   5 |   5 |   5 |            5 |    6 |
+
+Shift amount n'est utilisé que pour les instructions de décalage.
+
+**** Le format immédiat (I)
+
+Autre format, le format I (immédiat), pour les opérations avec des constantes :
+
+| Opcode | R_s | R_t ou R_d | Const |
+|      6 |   5 |          5 |    16 |
+
+La constante est donc au maximum 2^16. Pour manipuler des plus grosses constantes, il faudra plusieurs instructions.
+
+**** Le format jump (J)
+
+Autre format, le format J (jump), pour les sauts :
+
+| Opcode | Const |
+|      6 |    26 |
+
+La constante donne l'adresse vers laquelle on veut sauter. Ce processeur peut donc gérer 2^26 octets (64 Mo environ)
+
+L'opcode est toujours au même endroit, parce que c'est ce qu'il faut pour déterminer quel est le format utilisé.
+
+#+BEGIN_EXAMPLE
+Le opcode 000000 (et 000001 apparemment) disent qu'on est sur un format R.
+#+END_EXAMPLE
+
+*** Le jeu d'instruction
+
+Quatre catégories d'instruction :
+- Instructions de calcul (arithmétiques et logiques)
+- Instructions d'accès à la mémoire
+- Instructions de contrôle (sauts ou branchements)
+- Instructions dites système
+
+**** Instructions calcul :
+
+***** Addition (R) :
+
+#+BEGIN_SRC asm
+  Add Rd, Rs, Rt
+#+END_SRC
+
+Si le résultat de l'opération ne peut pas s'écrire sur 32 bits (33 maximum en cas d'addition de deux nombres sur 32 bits)
+erreur d'overflow.
+
+***** Addition U (R) :
+
+#+BEGIN_SRC asm
+  Addu Rd, Rs, Rt
+#+END_SRC
+
+Même chose sans erreur d'overflow
+
+***** Sub (R)
+Soustraction
+
+***** Subu (R)
+Même sans erreur d'overflow
+
+***** addi (I)
+
+#+BEGIN_SRC asm
+  Addi Rd, Rd, I
+#+END_SRC
+ Addition du contenu d'un registre et d'une constante.
+
+***** addiu (I)
+
+La même sans erreur d'overflow.
+
+Problème : On additione un entier sur 32 bits (le contenu d'un des 30 registres) et un entier sur 16 bits (les 16 derniers bits du mot).
+
+Pour que cette opération soit valable, on doit convertir ce nombre écrit sur 16 bits en un nombre écrit en 32 (pas l'inverse, le registre qui doit accueillir le résultat étant grand de 32 bits)
+
+*** Aparté : traduction d'un entier sur 16 bit vers 32 bits
+
+Un certain nombre de choses sur lesquelles Pirouz est passé un peu vite.
+
+#+BEGIN_THEOREM
+Premier résultat :
+
+$2^n = \sum_{i=O}^{n-1}(2^i) + 1$
+
+Généralisable à :
+
+$2^n = \sum_{i=q}^{n-1}(2^i) + 2^q$
+#+END_THEOREM
+
+#+BEGIN_PROOF
+La démonstration est assez simple, elle se base sur les résultats des sommes de séries géométriques.
+
+Soit la suite donnée par :
+$ u_0 = 1 $
+$ u_{n+1} = 2 * u_n$
+
+On dit que c'est une suite géométrique de raison 2, le terme général est donné par :
+
+$ u_n = u_0 * q^n $
+
+À partir de là, on peut donner la somme de la série :
+
+$ S_n = \sum_{i=0}^{n} q^k = \frac{1-q^{n+1}}{1-q}$
+Résultat supposé connu.
+
+Il suffit juste de remplacer q par 2 dans la précédente équation et on a bien :
+
+$2^n = \sum_{i=O}^{n-1}(2^i) + 1$
+
+CQFD
+
+Pour la généralisation, on a seulement besoin de casser la somme en deux :
+
+$2^n = \sum_{i=O}^{n-1}(2^i) + 1 = \sum_{i=O}^{q-1}(2^i) + \sum_{i=q}^{n-1}(2^i) + 1  $
+
+Le premier et le dernier terme se somment en $2^q$
+
+CQFD
+#+END_PROOF
+
+#+BEGIN_THEOREM
+Deuxième résultat :
+
+On peut écrire tous les entiers entre $0$ et $2^n - 1$ comme une combinaison binaire du vecteur $(2^{n-1}, 2^{n-2}, ...., 2^{0})$
+
+ALITER :
+
+\forall i \in \lbracket 0 ; 2^n - 1 \rbracket, \exists \alpha un vecteur binaire (dont tous les ) tq :
+
+$ i = \sum_{k=0}^{n-1} (\alpha_{i} * 2^k) $
+#+END_THEOREM
+
+#+BEGIN_THEOREM
+Corollaire :
+
+On peut shift la range des nombres écrivables de $0 ; 2^n - 1$ à $-2^{n-1} ; 2^{n-1} - 1$ en changeant le vecteur à :
+
+$(-2^{n-1}, 2^{n-2}, ...., 2^{0})$
+#+END_THEOREM
+
+Donc, si on veut écrire des nombres naturels, sans signe, on utilise le premier vecteur, si on veut écrire des nombres relatifs, on utilise le deuxième.
+
+#+BEGIN_EXAMPLE
+Donc, un même nombre en binaire : 1001, ne s'interprète pas de la même manière selon qu'on décide que c'est un entier naturel et un relatif :
+
+Si c'est un naturel : 9
+Si c'est un relatif : -7
+#+END_EXAMPLE
+
+#+BEGIN_THEOREM
+Corollaire : Conversion
+
+La conversion d'un nombre écrit sur n bits vers écrits sur n+k bits dépend de l'interprétation (naturel et relatif) :
+
+Si c'est un naturel, il suffit de rajouter des 0 à gauche.
+Si c'est un relatif, il faut rajouter le bit du poids fort à gauche.
+#+END_THEOREM
+
+#+BEGIN_PROOF
+Soit un nombre naturel écrit sur n bits. On veut l'écrire sur n+k bits.
+
+On a bien $\sum_{i=0}^{n-1}(\alpha_{i} * 2^i) = \sum_{i=0}^{n-1}(\alpha_{i} * 2^i) + \sum_{i=n}^{n+k-1}(0 * 2^i)$
+
+Écrire des 0 à gauche fonctionne.
+
+Soit un nombre relatif écrit sur n bits.
+
+Vérifions que :
+
+(1)$\sum_{i=0}^{n-2}(\alpha_{i} * 2^i) - \alpha_{n-1} * 2^{n-1} = 
+
+\sum_{i=0}^{n-2}(\alpha_{i} * 2^i) +
+\alpha_{n-1} * 2^{n-1} +
+\sum_{i=n}^{n+k-2}(\alpha_{n-1} * 2^i) -
+\alpha_{n-1} * 2^{n+k-1}
+$
+
+On rappelle que tous les $\alpha_i$ sont soit 0 soit 1. En particulier, on sait que $\alpha_{n-1}$ égale 0 ou 1.
+
+Vérifions cette égalité pour $\alpha_{n-1} = 0$ :
+
+Trivial.
+
+Vérifions cette égalité pour $\alpha_{n-1} = 1$ :
+
+On a :
+(2) $2^{n+k-1} = \sum_{i=n}^{n+k-2} + 2^{n-1} + 2^{n-1}$
+(Résultat plus haut) :
+
+En injectant (2) dans (1), on a bien le premier terme qui s'annule, le deux derniers font changer le signe du $2^{n-1}$ de l'équation (1). L'égalité est vérifiée.
+
+Donc, pour garder le même nombre relatif écrit sur n et sur n + k bits, il faut et il suffit de compléter à gauche du bit du poids fort la même valeur.
+
+#+END_PROOF
+
+On appelle les nombres dans Z les nombres arithmétiques, et les nombres de N de nombres logiques. (Jargon des architectes de processeur)
+
+Puisque l'immédiat appartient à Z, on a pas besoin d'une instruction subi ou subiu (il suffit d'utiliser addi ou addiu avec un entier négatif).
+
+*** Retour au jeu d'instructions
+
+**** Suite des instructions calcul : les instuctions de décalage
+
+***** SLL (Shift left logic) (R)
+
+#+BEGIN_SRC asm
+  sll Rd, Rt, Sham
+#+END_SRC
+
+Sham = Shift amount
+
+Sham est codé sur 5 bits (on n'a que 32 registres). On peut donc se permettre de mettre cette instruction dans R.
+
+Remarquez le Rt en lieu du Rs : on décale le deuxième registre source (pas de premier).
+
+Cette opération met le contenu de Rt à gauche de Rd (les bits à gauche, autrement dit le poids fort). (Revient à multiplier par une puissance de 2 la partie de Rt qui n'est pas "écrasée", on décale les bits à gauche).
+
+Dans le poids faible, on met des 0 : multiplication.
+
+***** SRL (Shift Right Logic) (R)
+
+#+BEGIN_SRC asm
+  srl Rd, Rt, Sham
+#+END_SRC
+
+Sham = Shift amount
+
+Sham est codé sur 5 bits. On peut donc se permettre de mettre cette instruction dans R.
+
+Remarquez le Rt en lieu du Rs : on décale le deuxième registre source (pas de premier).
+
+Cette opération met le contenu de Rt à droite de Rd (les bits à droite, autrement dit le poids faible).
+
+Dans le poids fort, on complète avec des 0 : nombre logique.
+
+***** SLA (Shift Right Arithmetic) (R)
+
+#+BEGIN_SRC asm
+  srl Rd, Rt, Sham
+#+END_SRC
+
+Pareil, avec des nombres arithmétiques (on étend le bit du poids fort si besoin est), et on complète avec des 0 à droite (multiplication par une puissance de 2).
+
+***** SRA
+
+#+BEGIN_SRC asm
+  sra Rd, Rt, Sham
+#+END_SRC
+
+Pareil, avec nombres arithmétiques (on décale à droite de Sham octets), et on complète à gauche en étendant le bit du poids fort.
+
+***** Or, And, Xor, Nor (R)
+Prend trois registres Rd, Rs, Rt, et inscrit dans Rd le résultat de l'opération bit à bit OR, AND, XOR ou NOR (tous les 32 couples de bits sont interprétés et mis dans le bit correspondant du registre destination).
+
+OR : On met 1 sssi au moins une des deux sources a 1
+AND : On met 1 sssi les deux sources ont 1
+XOR : On met 1 sssi exactement une source a 1
+NOR : On met 1 sssi exactement zéro source a 1
+
+***** Ori, Andi, Xori (I)
+Même chose que la série précédente, avec un immédiat I
+
+I est ici interprété comme un entier naturel (opération logique), il est donc étendu par zéro à 32 bits avant la comparaison.
+
+#+BEGIN_QUOTE
+The AND, OR, and XOR instructions can alternatively source one of the operands from a 16-bit immediate (which is zero-extended to 32 bits).
+
+[[https://en.wikipedia.org/wiki/MIPS_architecture#ALU][Wikipedia MIPS]]
+#+END_QUOTE
+
+On a pas Nori :
+
+La manière dont les architectes choisissent les opérations à inclure dans le jeu d'instruction dépendent du marché, des utilisateurs potentiels.
+On fait des benchmark, on obtient une table des instructions du processeur utilisées, et leur poids.
+
+Ici, Nori a dû être considéré pas assez important. De surcroît, c'est une opération de format I, et les places sont très chères (plus que dans R : Nor a été pris).
+
+Si on part du principe qu'on peut réinterpréter une opération inexistante en N opérations existantes, on peut sacrifier cette opération à condition qu'elle soit peu utilisée.
+
+#+BEGIN_THEOREM
+Loi d'Amdhal
+
+En ajoutant une instruction dans une machine, on a un gain. Le gain réel est bien entendu obtenu en tenant compte de la fréquence d'utilisation.
+
+Gain effectif = Gain théorique * Fréquence d'utilisation
+#+END_THEOREM
+
+***** lui (I)
+
+#+BEGIN_SRC asm
+  lui Rd, I
+#+END_SRC
+
+Load upper immediate
+
+Prend les 16 bits de I et les enregistre à gauche (poids fort) et on complète à droite (poids faible) avec des 0.
+
+***** slt (R)
+
+#+BEGIN_SRC asm
+  slt Rd, Rs, Rt
+#+END_SRC
+
+Set on less than
+
+Met 1 dans Rd sssi Rs < Rt (strictement), 0 sinon.
+Le contenu de Rs et Rt sont interprétés comme des entiers signés.
+
+***** Sltu (R)
+
+#+BEGIN_SRC asm
+  sltu Rd, Rs, Rt
+#+END_SRC
+
+Set on less than unsigned
+
+Met 1 dans Rd sssi Rs < Rt (strictement), 0 sinon.
+
+Le contenu de Rs et Rt sont interprétés comme des entiers non signés.
+
+***** Slti (I)
+
+#+BEGIN_SRC asm
+  stli Rd, Rs, I
+#+END_SRC
+
+Set on less than immediate
+
+Met 1 dans Rd sssi Rs < I (strictement), 0 sinon.
+
+Le contenu de Rs et I sont interprétés comme des entiers signés.
+
+***** sltiu I
+
+#+BEGIN_SRC asm
+  stliu Rd, Rs, I
+#+END_SRC
+
+Set on less than immediate unsigned
+
+Met 1 dans Rd sssi Rs < I (strictement), 0 sinon.
+
+Le contenu de Rs et I sont interprétés comme des entiers non signés.
+
+#+BEGIN_QUOTE
+The variants of these instructions that are suffixed with "unsigned" interpret the operands as unsigned integers (even those that source an operand from the sign-extended 16-bit immediate). 
+
+[[https://en.wikipedia.org/wiki/MIPS_architecture#ALU][Wikipedia MIPS]]
+#+END_QUOTE
+
+**** Les instructions d'accès mémoire
+
+Processeur MIPS est 32 bits, donc les adresses mémoire sont sur 32 bits.
+
+1 adresse représente 1 octet.
+
+On peut donc avoir 2^32 octets de mémoire, soit à peu près 4 Go.
+
+2G (de l'espace d'adressage) sont réservés au système d'exploitation. Grâce au registre STATUS, on sait si le truc qui essaie d'accéder à la zone noyau de l'espace d'adressage est le noyau ou un utilisateur.
+
+Important :
+Il est ici question d'*espace d'adressage* !!!! Pas de mémoire physique. À un espace d'adressage de 4Go peut ne pas correspondre la même mémoire physique.
+
+On peut lire ou écrire :
+- octet
+- Demi-mot (2 octets)
+- Mot entier (4 octets)
+
+***** Convention de cadrage
+
+Les données sont cadrées à droite (convention). On met un octet dans le poids faible du registre (l'octet à droite).
+
+***** Convention de boutage (endianness)
+
+Quand tu copies vers la mémoire depuis un registre, dans quel sens : poids faible en haut (adresse plus petite) ou en bas (adresse plus grande) ?
+
+Deux conventions :
+- Little-endian (petit-boutiste) : Adresse la plus petite reçoit le poids fiable, la fin du mot
+- Big-endian (gros-boutiste) : Adresse la plus grande reçoit le poids faible, la fin du mot
+
+***** Convention des alignements des adresses
+
+On ne peut lire que des adresses qui sont des multiples de la taille de l'objet.
+
+L'adresse d'un octet est multiple de 1
+L'adresse d'un demi-mot est multiple de 2
+L'adresse d'un mot est multiple de 4
+
+***** Lw (I)
+
+#+BEGIN_SRC asm
+  Lw Rd, I(Rs)
+#+END_SRC
+
+Lit 4 octets (load word) de mémoire à l'adresse Rs + I, enregistrés dans le registre Rd.
+
+***** Sw (I)
+
+#+BEGIN_SRC asm
+  Sw Rt, I(Rs)
+#+END_SRC
+
+Store Word
+
+Stocke 4 octets du registre Rt à l'adresse mémoire Rs + I.
+
+***** LH
+
+#+BEGIN_SRC asm
+  LH Rd, I(Rs)
+#+END_SRC
+
+Lit 2 octets (load half-word) de mémoire à l'adresse Rs + I, enregistrés dans le registre Rd.
+Serré à droite dans ce registre donc (convention de cadrage à droite).
+
+Cette opération considère des entiers relatifs : on étend donc à gauche avec le signe.
+
+***** LHU
+
+#+BEGIN_SRC asm
+  LHU Rd, I(Rs)
+#+END_SRC
+
+Lit 2 octets (load half-word) de mémoire à l'adresse Rs + I, enregistrés dans le registre Rd.
+Serré à droite dans ce registre donc (convention de cadrage à droite).
+
+Cette opération considère des entiers naturels : on étend donc à gauche avec des zéros.
+
+***** SH
+
+#+BEGIN_SRC asm
+  SH Rt, I(Rs)
+#+END_SRC
+
+Store Half Word
+
+Stocke 2 octets du registre Rt (les deux octets de droite, on suppose : convention) à l'adresse mémoire Rs + I.
+
+***** LB
+
+#+BEGIN_SRC asm
+  LB Rd, I(Rs)
+#+END_SRC
+
+Load Byte
+
+Lit 1 octet de mémoire à l'adresse Rs + I, enregistrés dans le registre Rd.
+Serré à droite dans ce registre donc (convention de cadrage à droite).
+
+Cette opération considère des entiers relatifs : on étend donc à gauche avec le signe.
+
+***** LBU
+
+#+BEGIN_SRC asm
+  LBU Rd, I(Rs)
+#+END_SRC
+
+Load Byte Unsigned
+
+Lit 1 octet de mémoire à l'adresse Rs + I, enregistrés dans le registre Rd.
+Serré à droite dans ce registre donc (convention de cadrage à droite).
+
+Cette opération considère des entiers naturels : on étend donc à gauche avec des zéros.
+
+***** SB
+
+#+BEGIN_SRC asm
+  SB Rt, I(Rs)
+#+END_SRC
+
+Store Byte
+
+Stocke 1 octet du registre Rt (l'octet de droite, on suppose) à l'adresse mémoire Rs + I.
+
+**** Instructions de contrôle
+
+***** Beq (I)
+
+Branch if equal : Saute vers l'adresse "Label" si Rt à Rs
+
+C'est l'assembleur qui traduit Label vers une adresse.
+
+#+BEGIN_SRC asm
+  Beq Rs, Rt, Label
+#+END_SRC
+
+Label est remplacé par un immédiat.
+
+Si Rs != Rt, on continue à l'addresse suivante (@cible = @seq)
+Si Rs = Rt, on (@cible = @Bt + 4 + I*4)
+
+(Pourquoi +4 : On pense que c'est pour éviter une boucle infinie si I est donné à 0. On pourrait toujours donner I = -1, mais il faudrait le vouloir)
+
+***** Bne (I)
+
+Branch if ne
+
+#+BEGIN_SRC asm
+  Bne Rs, Rt, Label
+#+END_SRC
+
+***** BlTZ (I)
+Branch if less than 0 (strict)
+
+Compare Rs à 0 (pas besoin de Rt)
+
+#+BEGIN_SRC asm
+  BlTZ Rs, Label
+#+END_SRC
+
+***** BleZ (I)
+Branch if less than 0 (large)
+
+#+BEGIN_SRC asm
+  BleZ Rs, Label
+#+END_SRC
+
+***** BgTZ (I)
+Branch if greater than 0 (strict)
+
+#+BEGIN_SRC asm
+  BgTZ Rs, Label
+#+END_SRC
+
+***** BgeZ (I)
+Branch if greater than 0 (large)
+
+#+BEGIN_SRC asm
+  BgeZ Rs, Label
+#+END_SRC
+
+***** J (J)
+
+#+BEGIN_SRC asm
+  J label
+#+END_SRC
+
+Branchement inconditionnel, soit saut.
+
+Problème : On a que 26 bits pour mettre l'adresse vers laquelle on doit sauter.
+
+On met :
+
+- Les 4 (premiers) bits de l'adresse actuelle
+- Les 26 bits du label
+- 2 bits 00 au poids faible (en effet, si on saute vers un mot, l'adresse doit être multiple de 4. Et on sait qu'on saute vers un mot, puisqu'on saute vers une instruction.)
+
+(On se rappellera de l'aparté plus haut :
+A partir de cet aparté, on peut déduire trivialement que si un nombre *non-nul* écrit en binaire a ses n derniers chiffres égaux à 0, alors il est divisible par 2^n)
+
+La partie variable de l'adresse de destination est de l'ordre de 2^28, pas de 2^32 (les 4 premiers bits fixes égaux aux 4 premiers bits de l'adresse actuelle). On ne peut sauter que dans un bloc (256 Mo) au lieu de pouvoir sauter dans l'espace d'adressage complet de \approx 4 Go
+
+***** Jr (R)
+
+Saute à l'adresse contenue dans un registre Rs.
+
+#+BEGIN_SRC asm
+  Jr Rs
+#+END_SRC
+
+***** Jal (J)
+
+Jump and link. On ne pert pas l'endroit d'où on a sauté.
+
+L'adresse de retour (l'adresse d'où on est parti + 4) est stockée dans R31.
+
+#+BEGIN_SRC asm
+  Jal Label
+#+END_SRC
+
+***** Jalr (R)
+
+Jump and link, mais avec un registre Rs
+
+#+BEGIN_SRC asm
+  Jalr Rs
+#+END_SRC
+
+
+* Cours 1 : 19/09/2019
+
+* Annexes
+
+
+
