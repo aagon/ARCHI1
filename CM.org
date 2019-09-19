@@ -44,7 +44,7 @@ Architecture concerne tous les aspects visibles de l'objet pour l'utilisateur. T
 #+END_DEFINITION
 
 Qui est l'utilisateur dans le cas d'un processeur ?
-[les processus]
+[les processus, pas vraiment l'utilisateur de la machine]
 
 
 #+BEGIN_DEFINITION
@@ -82,7 +82,7 @@ Registre manipulable (lire ou écrire) avec une instruction assembleur
 Il y a 32 registres entiers visibles dans le MIPS-32
 R0 à R31.
 
-Chaque registre peut contenir 32 bits, soit un entiers.
+Chaque registre peut contenir 32 bits.
 
 Aucune différence de permission entre ces registres, sauf R0 et R31.
 
