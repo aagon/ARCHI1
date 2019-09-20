@@ -249,16 +249,18 @@ $2^n = \sum_{i=q}^{n-1}(2^i) + 2^q$
 La démonstration est assez simple, elle se base sur les résultats des sommes de séries géométriques.
 
 Soit la suite donnée par :
-$ u_0 = 1 $
-$ u_{n+1} = 2 * u_n$
+
+- $u_0 = 1$
+
+- $u_{n+1} = 2 * u_n$
 
 On dit que c'est une suite géométrique de raison 2, le terme général est donné par :
 
-$ u_n = u_0 * q^n $
+$u_n = u_0 * q^n$
 
 À partir de là, on peut donner la somme de la série :
 
-$ S_n = \sum_{i=0}^{n} q^k = \frac{1-q^{n+1}}{1-q}$
+$S_n = \sum_{i=0}^{n} q^k = \frac{1-q^{n+1}}{1-q}$
 Résultat supposé connu.
 
 Il suffit juste de remplacer q par 2 dans la précédente équation et on a bien :
@@ -269,7 +271,7 @@ CQFD
 
 Pour la généralisation, on a seulement besoin de casser la somme en deux :
 
-$2^n = \sum_{i=O}^{n-1}(2^i) + 1 = \sum_{i=O}^{q-1}(2^i) + \sum_{i=q}^{n-1}(2^i) + 1  $
+$2^n = \sum_{i=O}^{n-1}(2^i) + 1 = \sum_{i=O}^{q-1}(2^i) + \sum_{i=q}^{n-1}(2^i) + 1$
 
 Le premier et le dernier terme se somment en $2^q$
 
@@ -283,15 +285,15 @@ On peut écrire tous les entiers entre $0$ et $2^n - 1$ comme une combinaison bi
 
 ALITER :
 
-\forall i \in \lbracket 0 ; 2^n - 1 \rbracket, \exists \alpha un vecteur binaire (dont tous les ) tq :
+$\forall i \in  [0 ; 2^n - 1], \exists \alpha$ un vecteur binaire (dont tous les éléments égalent 0 ou 1) tq :
 
-$ i = \sum_{k=0}^{n-1} (\alpha_{i} * 2^k) $
+$i = \sum_{k=0}^{n-1} (\alpha_{i} * 2^k)$
 #+END_THEOREM
 
 #+BEGIN_THEOREM
 Corollaire :
 
-On peut shift la range des nombres écrivables de $0 ; 2^n - 1$ à $-2^{n-1} ; 2^{n-1} - 1$ en changeant le vecteur à :
+On peut shift la range des nombres écrivables de l'intervalle $[0 ; 2^n - 1]$ à $[-2^{n-1} ; 2^{n-1} - 1]$ en changeant le vecteur à :
 
 $(-2^{n-1}, 2^{n-2}, ...., 2^{0})$
 #+END_THEOREM
