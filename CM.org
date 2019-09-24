@@ -35,6 +35,9 @@ SESI obligatoire, SAR, RES, SFPN sont présents.
 
 Support de cours apparemment compilé par les étudiants de ALIAS.
 
+Hennessey-Patterson, _Computer architecture_
+Il faut faire les annales, la structure des examens est très classique.
+
 * Cours 0 : 18/09/2019
 
 Architecture et réalisation sont indépendants.

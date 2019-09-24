@@ -1,0 +1,168 @@
+#+TITLE : Prise de notes TD 4I100 ARCHI1
+#+PROPERTY: header-args :mkdirp yes
+#+STARTUP: inlineimages
+
+* TD 1 : 24/09/2019
+
+La difficulté de la conception de MIPS, c'est de concevoir un jeu d'instructions qui tiennent toutes en 32 bits.
+
+** Exercice 1
+
+#+BEGIN_SRC asm
+  lui R5, 0
+#+END_SRC
+
+Il y a plein de possibilités pour initialiser R5 à 0.
+
+Apparemment, lui n'est pas la manière canonique de régler le problème. On préfère les opérations logiques bit par bit.
+
+#+BEGIN_SRC asm
+  Xor R5, R5, R5
+#+END_SRC
+
+** Exercice 2
+
+#+BEGIN_SRC asm
+  Add R5, R6, R0
+#+END_SRC
+
+#+BEGIN_SRC asm
+  Or R5, R6, R0
+#+END_SRC
+
+** Exercice 3
+
+La bonne manière :
+
+#+BEGIN_SRC asm
+	  Ori R5, R0, 0x4567
+#+END_SRC
+
+La manière :
+
+#+BEGIN_SRC asm
+	  Addi R5, R0, 0x4567
+#+END_SRC
+
+** Exercice 4
+
+#+BEGIN_SRC asm
+	    Lui R5, 0x4567
+	    Ori R5, R5, 0xABCD
+#+END_SRC
+
+** Exercice 5
+
+Compilation à la main.
+
+#+BEGIN_SRC mips
+	  OR          R9, R4, R0
+  Boucle: LB          R8, 0(R9)
+	  BEQ         R8, R0, fin
+	  ADDIU       R9, R9, 1
+	  J           Boucle
+  Fin:    SUB           R2, R9, R4
+#+END_SRC
+
+XS
+
+#+BEGIN_SRC mips
+	  ADDIU       RS,R4,-1
+  Boucle: ADDIU       R2,R2,1
+	  LB          R8,0(R2)
+	  BNE         R8, R0, Boucle
+	  SUB         R2,R2,R4
+#+END_SRC
+
+** Exercice 6
+
+Recopie de chaîne de caractères.
+
+Solution Agon-Rambosson
+
+#+BEGIN_SRC mips
+	  OR          R8,R5,R0
+	  OR          R9,R4,R0
+  Boucle: LB          R10,0(R8)
+	  BEQ         R10,R0,fin
+	  SB          R10,0(R9)
+	  ADDIU       R9,R9,1
+	  ADDIU       R8,R8,1
+	  J           Boucle
+  Fin:    SB          R0,0(R9)
+	  OR          R2,R4,R0
+#+END_SRC
+
+** Exercice 7
+
+Ecrire la fonction strupper de la bibliothèque standart en assembleur.
+
+On a une condition un peu complexe, qu'on ne pourra pas exprimer en une instruction, et qu'il faudra transformer :
+
+#+BEGIN_SRC c
+  char *strupper (char *str)
+  {
+	  int i = 0;
+
+	  while (str[i] != '\0') {
+
+		  if ((str[i] >= 'a') && (str[i] <= 'z')) {
+			  str[i] = str[i] - 'a' + 'A';
+		  }
+
+		  i++;
+	  }
+  }
+#+END_SRC
+
+La condition de la ligne 7 du programme doit être traduite en un certain nombre de conditions qui se puissent transcrire en le moins d'instructions asm possible.
+
+En particulier, les seules opérations de comparaison sont slt et ses dérivés : on doit exprimer les conditions sous la forme Reg < Immédiat, ou Reg < Reg.
+
+#+BEGIN_SRC mips
+	  ADDU        R2,R0,R4
+	  ADDIU       R8,R0,'a'
+	  ADDIU       R9,R0,'z'
+  loop:   LB          R10,0(R4)
+	  SLT         R11,R10,R8
+	  SLT         R12,R9,R10
+	  OR          R12,R12,R11
+	  BNE         R12,R0,endif
+	  ADDIU       R10,R10,'A' - 'a'
+	  SB          R10,0(R4)
+  endif:  ADDIU       R4,R4,1
+	  BNE         R10,R0,loop
+#+END_SRC
+
+
+[A reprendre à la maison]
+
+** Exercice 8
+
+La subtilité ici est de ne pas à se servir de mult, qui est une opération coûteuse.
+Décalage des bits à gauche.
+
+Multiplication par 2 : décalage de tous les bits à gauche.
+Multiplication par 3 : multiplication par 2, puis addition avec l'antécédent.
+
+#+BEGIN_SRC mips
+
+#+END_SRC
+
+On a une condition stricte, en revanche :
+Vu qu'on fait une multiplication par 2 et une par 3, on doit avoir les deux bits du poids fort à 0, sinon le résultat de la multiplication ne se laisse pas écrire dans les 32 bits du registre.
+
+On part du principe que cette condition est remplie.
+
+#+BEGIN_SRC mips
+	  OR          R2,R0,R6
+  loop:   BEQ         R7,R0,fin
+	  LW          R8,0(R4)
+	  LW          R9,0(R5)
+	  SLL         R8,R8,1
+	  SLL         R10,R9,1
+	  ADDIU       R10,R10,R9
+#+END_SRC
+
+
+
