@@ -38,6 +38,7 @@ Support de cours apparemment compilé par les étudiants de ALIAS.
 Hennessey-Patterson, _Computer architecture_
 Il faut faire les annales, la structure des examens est très classique.
 
+
 * Cours 0 : 18/09/2019
 
 Architecture et réalisation sont indépendants.
@@ -236,7 +237,7 @@ Pour que cette opération soit valable, on doit convertir ce nombre écrit sur 1
 
 *** Aparté : traduction d'un entier sur 16 bit vers 32 bits
 
-Un certain nombre de choses sur lesquelles Pirouz est passé un peu vite.
+Un certain nombre de choses sur lesquelles Pirouz "Ferrari" Bazargan est passé un peu vite.
 
 #+BEGIN_THEOREM
 Premier résultat :
@@ -741,6 +742,7 @@ Jump and link, mais avec un registre Rs
 
 
 * Cours 1 : 19/09/2019
+
 
 * Annexes
 

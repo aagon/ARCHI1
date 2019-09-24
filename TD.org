@@ -61,10 +61,9 @@ Compilation à la main.
 	  BEQ         R8, R0, fin
 	  ADDIU       R9, R9, 1
 	  J           Boucle
-  Fin:    SUB           R2, R9, R4
+  Fin:    SUB         R2, R9, R4
 #+END_SRC
 
-XS
 
 #+BEGIN_SRC mips
 	  ADDIU       RS,R4,-1
@@ -93,6 +92,8 @@ Solution Agon-Rambosson
 	  OR          R2,R4,R0
 #+END_SRC
 
+On a eu l'idée, probablement un peu difficile à mettre en place pour le moment, d'implémenter un cache dans les registres. Au lieu de charger un octet, on pourrait charger un mot entier, et traiter 8 bits par 8 bits le contenu du registre (un peu sale) : ça permettrait de diviser le nombre d'accès mémoire par 4.
+
 ** Exercice 7
 
 Ecrire la fonction strupper de la bibliothèque standart en assembleur.
@@ -119,6 +120,15 @@ La condition de la ligne 7 du programme doit être traduite en un certain nombre
 
 En particulier, les seules opérations de comparaison sont slt et ses dérivés : on doit exprimer les conditions sous la forme Reg < Immédiat, ou Reg < Reg.
 
+On a :
+
+(str[i] >= 'a') && (str[i] <= 'z') =
+C((str[i] < 'a') || ('z' < str[i]))
+
+C(A || B) = C(A) && c(B)
+
+On peut donc mettre dans un deux registres le résultat de la comparaison (str[i] < 'a') et ('z' < str[i]), en faire l'union dans un des deux registres, puis tester pour la différence avec 0 de ce registre : si le registre contient un entier différent de 0, on exécute à partir de l'étiquette endif.
+
 #+BEGIN_SRC mips
 	  ADDU        R2,R0,R4
 	  ADDIU       R8,R0,'a'
@@ -135,34 +145,55 @@ En particulier, les seules opérations de comparaison sont slt et ses dérivés 
 #+END_SRC
 
 
-[A reprendre à la maison]
-
 ** Exercice 8
 
+On se propose d'écrire la fonction suivante en assembleur :
+
+#+BEGIN_SRC c
+  int *addvect(int *a, int *b, int *c, int size)
+  {
+	  int i = 0;
+
+	  while (size > 0) {
+		  c[i] = 2 * a[i] + 3 * b[i];
+		  i++;
+		  size--;
+	  }
+
+	  return c;
+  }
+#+END_SRC
+
 La subtilité ici est de ne pas à se servir de mult, qui est une opération coûteuse.
-Décalage des bits à gauche.
+
+La solution, c'est le décalage des bits à gauche : on se sert des propriétés du binaire.
 
 Multiplication par 2 : décalage de tous les bits à gauche.
 Multiplication par 3 : multiplication par 2, puis addition avec l'antécédent.
-
-#+BEGIN_SRC mips
-
-#+END_SRC
 
 On a une condition stricte, en revanche :
 Vu qu'on fait une multiplication par 2 et une par 3, on doit avoir les deux bits du poids fort à 0, sinon le résultat de la multiplication ne se laisse pas écrire dans les 32 bits du registre.
 
 On part du principe que cette condition est remplie.
 
+Voilà notre solution (un certain nombre d'erreurs du tableau ont été corrigées) :
+
 #+BEGIN_SRC mips
 	  OR          R2,R0,R6
-  loop:   BEQ         R7,R0,fin
+  loop:   BLEZ        R7,fin
 	  LW          R8,0(R4)
 	  LW          R9,0(R5)
-	  SLL         R8,R8,1
-	  SLL         R10,R9,1
-	  ADDIU       R10,R10,R9
+	  SLL         R8,R8,1             #R8 contient 2a[i]
+	  SLL         R10,R9,1            
+	  ADDU        R10,R10,R9          #R10 contient 3b[i]
+	  ADDU        R10,R10,R8          #R10 contient 2a[i] + 3b[i]
+	  SW          R10,0(R6)
+	  ADDIU       R6,R6,4
+	  ADDIU       R4,R4,4
+	  ADDIU       R5,R5,4
+	  ADDIU       R7,R7,-1
+	  J           loop
+  fin:
 #+END_SRC
 
-
-
+On se gardera les exercices bonus pour la suite.
