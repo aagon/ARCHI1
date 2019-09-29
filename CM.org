@@ -744,6 +744,172 @@ Jump and link, mais avec un registre Rs
 * Cours 1 : 19/09/2019
 
 
+* Cours 2 : 26/09/2019
+
+CISC vs RISC
+
+#+BEGIN_DEFINITION
+La micro-électronique naît avec la capacité qu'on a d'intégrer des fonctions sur des semi-conducteurs. On date sa naissance aux années 50.
+#+END_DEFINITION
+
+#+BEGIN_DEFINITION
+Loi de Moore
+
+Le nombre de transistors sur les circuits intégrés est censé doubler tous les 18 mois.
+#+END_DEFINITION
+
+#+BEGIN_DEFINITION
+Transistor :
+
+| Drain | Grille | Source |
+
+La largeur de la grille détermine la tension entre le drain et la source. Plus on arrive à réduire la largeur de la grille, on peut augmenter le nombre de transistors.
+
+Aujourd'hui la largeur de la grille minimale est de 7nm (elle était de l'ordre de 1 µm il y a 40 ans).
+#+END_DEFINITION
+
+CISC pensait que ces capacités supplémentaires serviront à faire des instructions de plus en plus complexes. Le but était de faire tendre l'assembleur CISC vers la complexité des langages de haut niveau. Le but était de réduire le *gap sémantique* entre les langages de haut niveau et l'assembleur CISC.
+
+L'idée était que plus le langage assembleur est fort, plus il est facile d'exprimer des algorithmes complexes en un nombre réduit d'instructions processeur.
+
+#+BEGIN_EXAMPLE
+Le processeur IBM 370, datant de 1978, est l'exemple canonique du processeur CISC. Incluait une instruction strcmp (comparaison de chaîne de caractères).
+
+Le processeur VAX (Virtual architecture extension) Digital (les inventeurs de la mémoire virtuelle). Dans le processeur VAX, on pouvait faire des additions avec des opérandes en mémoire (pas forcément dans les registres), avec le supplément d'instructions que ça supposait.
+
+Chaque processeur était conçu pour un type d'application particulier.
+#+END_EXAMPLE
+
+
+L'intuition de RISC, c'est exactement le contraire. Il faut réduire les instructions, rapprocher l'assembleur du matériel.
+
+*** Comparaison
+
+Soit l'instruction C suivante :
+
+#+BEGIN_SRC c
+  a = b + c;
+#+END_SRC
+
+Les traductions en :
+
+| VAX            | Mips           |
+| ADD @a, @b, @c | LW R4, @b      |
+|                | LW R5, @c      |
+|                | ADD R6, R4, R5 |
+|                | SW R6, @a      |
+
+Si on retient comme critère le nombre d'instructions, VAX est objectivement mieux.
+
+Il y a d'autres critères :
+
+- L'encombrement mémoire (quel espace occupe le programme en mémoire avant d'être exécuté) : VAX est meilleur uniquement si la mémoire est chère.
+- Facilité d'écrire les programmes : VAX est meilleur uniquement si on doit écrire en assembleur à la main.
+- Time-to-market : on veut un processeur facile à faire, pour réduire le TTM (TTM du RISC = moins d'un an alors que TTM du CISC = 4 ans).
+
+On peut choisir de faciliter la vie des gens qui fabriquent le matériel ou ceux qui écrivent les programmes en assembleur.
+Si les deuxièmes disparaissent, on a plus besoin de choisir.
+
+Le vrai sens des processeurs RISC, c'est Reject Important Stuff into the Compiler. C'était pensé comme une insulte de la part de CISC (dans un long papier du début des années 80), mais c'est en fait exactement l'idée, assumée par RISC : la production de l'assembleur est trop compliqué pour être laissé à des humains, ce sont les compilateurs qui doivent s'en occuper.
+
+La conséquence logique de ça est donnée par une citation bien plus tardive (années 2000-2010) de Linus Torvalds :
+
+#+BEGIN_QUOTE
+Une architecture n'existe pas s'il n'existe pas de compilateur *C* vers cette architecture.
+
+Linus Torvalds
+#+END_QUOTE
+
+*** Performance
+
+La performance dépend de deux facteurs.
+
+- La fréquence du processeur (F : Fréquence)
+- Le nombre de cycles de la totalité des instructions à exécuter (CPI : Cycle Par Instruction), cappé à 1 bien entendu.
+
+La performance est donc donnée par $\frac{F}{CPI}$
+
+Pour se donner un objectif maximal sur la deuxième composante, il faut et il suffit d'atteindre ou de tendre vers CPI = 1.
+On prend chacune des instructions, et on regarde ce qu'on doit mettre dans le processeur pour qu'elle soit exécutable en un seul cycle (si possible).
+
+*Voilà les contraintes sur la réalisation*
+
+|   |   |                              | ADD Rd, Rs, Rt | LW Rd, I(Rs) | SW | JR |
+|---+---+------------------------------+----------------+--------------+----+----|
+|   | D | Lire instruction en mémoire  | V              | V            | V  | V  |
+|   | D | Décoder opcode               | V              | V            | V  | V  |
+| D | D | Lire les opérandes           | V              | V            | V  | V  |
+|   | D | Operation                    | V              | V            | V  |    |
+|   | D | Accès mémoire                |                | V            | V  |    |
+|   | X | Sauvegarde du résultat       | V              | V            |    |    |
+| X |   | Adresse instruction suivante | V              | V            | V  | V  |
+
+Le matériel est défini par la colonne de gauche : Ce que le matériel doit posséder pour pouvoir exécuter toutes les instructions possibles dans le jeu.
+
+On doit maintenant regarder quelle opération dépend de quelle opération : graphe de dépendance.
+
+Sauvegarde du résultat dépend de l'accès mémoire, qui lui même dépend de l'opération (quelle opération), qui lui-même dépend de l'opérande, qui dépend de quelle instruction on est en train d'exécuter, donc du décodage, qui dépend du chargement de l'instruction en mémoire.
+
+Adresse de l'instruction suivante dépend de la lecture des opérandes.
+
+La réalisation est en fait très simple : il faut et il suffit de construire une réalisation qui respecte les dépendances :
+
+[[./CM2/realisation.png][Schéma de réalisation]]
+
+On parle bien d'une boucle de conception : on ne part pas des instructions pour faire la réalisation, mais pas complètement l'inverse non plus.
+
+On a bien CPI = 1, par construction (le CPI est défini comme le temps qu'il faut pour traverser le matériel qui est les opérations)
+
+Comment on fait pour augmenter la fréquence à CPI défini et fixe ?
+
+*** Pipeline
+
+Notion de pipeline : au fond, chacun des ports du matériel peut être occupé au même moment. Si on met des registres entre les opérations atomiques, on augmente la fréquence. Il faut foutre des registres partout. Plus on découpe, plus on augmente la fréquence.
+
+Le découpage en étage de pipeline n'a rien à voir avec les opérations : on n'est pas limité aux opérations, on peut couper en plein de portes, ou d'étage de pipeline.
+
+La période d'horloge est défini comme l'opération la plus grande. Il faut couper de manière équilibrée.
+
+#+BEGIN_THEOREM
+Loi de pipeline :
+
+- Les étages doivent être équilibrés
+- Les étages doivent être séparés par des registres
+- Le processeur doit disposer de deux accès à la mémoire : une pour les instructions, une pour les données (car il doit faire par cycle soit un soit deux accès à la mémoire : de toute façon on doit lire l'instruction, et ensuite on peut avoir à enregistrer des données.)
+- On ne peut se servir d'un matériel qu'une fois par cycle
+#+END_THEOREM
+
+Les architectes du MIPS ont défini le pipeline comme ceci :
+
+|   |   |                              | ADD Rd, Rs, Rt | LW Rd, I(Rs) | SW | JR | Etage de pipeline       |
+|---+---+------------------------------+----------------+--------------+----+----+-------------------------|
+|   | D | Lire instruction en mémoire  | V              | V            | V  | V  | IFC : Instruction fetch |
+|   | D | Décoder opcode               | V              | V            | V  | V  | DEC : Decode            |
+| D | D | Lire les opérandes           | V              | V            | V  | V  | DEC                     |
+|   | D | Operation                    | V              | V            | V  |    | EXE : Execute           |
+|   | D | Accès mémoire                |                | V            | V  |    | MEM : Memory access     |
+|   | X | Sauvegarde du résultat       | V              | V            |    |    | WBK : Writeback         |
+| X |   | Adresse instruction suivante | V              | V            | V  | V  |                         |
+
+Pipeline :
+
+| I | D     | E     | M     | W     |       |       |       |       |       |
+|   | I + 1 | D + 1 | E + 1 | M + 1 | W + 1 |       |       |       |       |
+|   |       | I + 2 | D + 2 | E + 2 | M + 2 | W + 2 |       |       |       |
+|   |       |       | I + 3 | D + 3 | E + 3 | M + 3 | W + 3 |       |       |
+|   |       |       |       | I + 4 | D + 4 | E + 4 | M + 4 | W + 4 |       |
+|   |       |       |       |       | I + 5 | D + 5 | E + 5 | M + 5 | W + 5 |
+
+Temps en abscisses (chaque trait est un front d'horloge : montant plus descendant)
+
+Si ça correspond à peu près aux opérations, c'est par hasard : il se trouve que les étages étaient équilibrés de cette manière.
+
+Le cycle d'instruction, c'est le temps qu'il faut pour injecter une nouvelle instruction (elle a été multipliée par 5 par notre amélioration)
+La latence, c'est le temps que l'instruction met à se terminer (elle n'a pas changé, au moins pour la première opération)
+
+On connaît l'adresse de l'instruction qui suit après D, mais on en a besoin avant ! En fait, l'adresse de l'instruction qui suit est l'adresse de l'instruction i + 2. L'adresse de l'instruction i + 1 est connue dès la fin de l'étage D de l'instruction n - 1.
+
+
 * Annexes
 
 
