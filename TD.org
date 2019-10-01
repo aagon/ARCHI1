@@ -4,9 +4,11 @@
 
 * TD 1 : 24/09/2019
 
+** TD 1
+
 La difficulté de la conception de MIPS, c'est de concevoir un jeu d'instructions qui tiennent toutes en 32 bits.
 
-** Exercice 1
+*** Exercice 1
 
 #+BEGIN_SRC asm
   lui R5, 0
@@ -20,7 +22,7 @@ Apparemment, lui n'est pas la manière canonique de régler le problème. On pr�
   Xor R5, R5, R5
 #+END_SRC
 
-** Exercice 2
+*** Exercice 2
 
 #+BEGIN_SRC asm
   Add R5, R6, R0
@@ -30,7 +32,7 @@ Apparemment, lui n'est pas la manière canonique de régler le problème. On pr�
   Or R5, R6, R0
 #+END_SRC
 
-** Exercice 3
+*** Exercice 3
 
 La bonne manière :
 
@@ -44,14 +46,14 @@ La manière :
 	  Addi R5, R0, 0x4567
 #+END_SRC
 
-** Exercice 4
+*** Exercice 4
 
 #+BEGIN_SRC asm
 	    Lui R5, 0x4567
 	    Ori R5, R5, 0xABCD
 #+END_SRC
 
-** Exercice 5
+*** Exercice 5
 
 Compilation à la main.
 
@@ -73,7 +75,7 @@ Compilation à la main.
 	  SUB         R2,R2,R4
 #+END_SRC
 
-** Exercice 6
+*** Exercice 6
 
 Recopie de chaîne de caractères.
 
@@ -94,7 +96,7 @@ Solution Agon-Rambosson
 
 On a eu l'idée, probablement un peu difficile à mettre en place pour le moment, d'implémenter un cache dans les registres. Au lieu de charger un octet, on pourrait charger un mot entier, et traiter 8 bits par 8 bits le contenu du registre (un peu sale) : ça permettrait de diviser le nombre d'accès mémoire par 4.
 
-** Exercice 7
+*** Exercice 7
 
 Ecrire la fonction strupper de la bibliothèque standart en assembleur.
 
@@ -144,8 +146,7 @@ On peut donc mettre dans un deux registres le résultat de la comparaison (str[i
 	  BNE         R10,R0,loop
 #+END_SRC
 
-
-** Exercice 8
+*** Exercice 8
 
 On se propose d'écrire la fonction suivante en assembleur :
 
@@ -197,3 +198,242 @@ Voilà notre solution (un certain nombre d'erreurs du tableau ont été corrigé
 #+END_SRC
 
 On se gardera les exercices bonus pour la suite.
+
+
+* TD 2 : 01/10/2019
+
+** TD 1, suite
+
+*** Aparté : les registres
+
+Conventions utilisées par GNU Compiler Collection, pour MIPS
+
+| R0        | Registre qui vaut toujours 0                                                                                    |
+| R1        | A ne pas utiliser, réservé à l'assembleur.                                                                      |
+| R2 - R3   | Valeur de retour de la fonction appelée (R3 est là pour les retours sur 64 bits)                                |
+| R4 - R7   | Registre pour passer les 4 premiers paramètres de la fonction appelée (les éventuels suivants sont sur la pile) |
+| R8 - R15  | Registres de travail non préservés à travers l'appel d'une fonction (flush à l'entrée d'une fonction)           |
+| R16 - R23 | Registres de travail préservés à travers l'appel d'une fonction                                                 |
+| R24 - R25 | Comme R8 - R15                                                                                                  |
+| R26 - R27 | Ne doivent pas être utilisés par le compilateur                                                                 |
+| R28       | GP (Global pointer : pointeur vers les variables globales)                                                      |
+| R29       | SP (Stack pointer : pointe sur la pile, là où les données non dynamiques sont stockées et lues)                 |
+| R30       | Comme R16 - R23                                                                                                 |
+| R31       | Adresse de retour de la fonction appelante                                                                      |
+
+La pile grandit vers le bas.
+
+On doit mettre dans la pile les paramètres de la fonction
+
+#+BEGIN_SRC mips
+	  ADDIU       R29,R29,-(n*4)
+	  SW          R4,16(R29)
+	  SW          R5,12(R29)
+	  SW          R6,8(R29)
+	  SW          R7,4(R29)
+	  SW          R8,0(R29)
+	  JAL         @fonction
+#+END_SRC
+
+JAL fait deux choses :
+- Met PC + 4 dans R31
+- Il change le registre PC vers l'adresse passée en paramètre
+
+On doit faire ça nous même :
+- Allouer (1 + nb(R à sauver) + nb(VarLoc)) * 4
+- Stocker les Registres à sauver
+- Stocker les variables locales
+
+Restitution de la fonction :
+- On doit charger les registres qui auraient pu être écrasés, depuis la pile
+- On bouge le SP vers le haut, de la même quantité qu'on l'avait baissé avant
+- On saute à l'adresse contenue dans R31
+
+On a un problème : le registre R8 ne contient pas de paramètre de la fonction appelée. Il est juste autre part dans la pile, il faut aller le chercher : en fait, on suppose gentiment que toutes une série d'opérations chiantes sont faites pour nous, mais pas toutes non plus : à un moment, on décide qu'on doit faire les opérations faites par le compilateur, à un autre, on décide que ce n'est pas la peine, sans logique apparente.
+
+On a en fait toute une série d'instructions *implicites dans les exercices* LW pour charger les paramètres depuis la pile (ce qui requiert qu'on connaisse leur adresse) : a priori, le compilateur est capable de les retrouver, c'est lui qui a écrit le code assembleur qui les stockait en un endroit de la pile : il n'est pas compliqué pour lui de se rappeler d'où il les a mis.
+
+*** Exercice 9
+
+On prend un exemple, en supposant gentiment que les paramètres sont déjà dans les bons registres (on va quand même devoir lever cette hypothèse un moment.)
+
+#+BEGIN_SRC mips
+  pgcd:   ADDIU       R29, R29,-4
+	  SW          R31,0(R29)
+
+  loop:   BEQ         R4,R5,eloop
+	  SLTU        R16,R4,R5
+	  BEQ         R16,R0,else
+	  SUB         R5,R5,R4
+	  J           loop
+
+  else:   SUB         R4,R4,R5
+	  J           loop
+
+  eloop:  OR          R2,R4,R0
+
+  eplg:   LW          R31,0(R29)
+	  ADDIU       R29,R29,4
+	  JR          R31
+#+END_SRC
+
+*** Exercice 10
+
+Mon idée, très verbeuse, linéaire, occupant beaucoup de registres, aimablement corrigée et commentée par mes camarades :
+
+#+BEGIN_SRC mips
+  tri:
+	  ADDIU       R29,R29,-28
+	  SW          R31,16(R29)
+
+	  OR          R8,R0,R0
+
+  loop1:
+	  SUB         R12,R8,R5
+	  BGEZ        R12,eloop1
+
+	  SLL         R15,R8,2
+	  ADD         R15,R4,R15
+
+	  LW          R10,0(R15)
+	  ADDI        R9,R8,1
+  loop2:
+	  SUB         R13,R9,R5
+	  BGEZ        R13,eloop2
+	  SLL         R24,R9,2
+	  ADD         R24,R4,R24
+
+	  LW          R14,0(R24)
+
+	  ADDI        R9,R9,1
+	  SUB         R25,R14,R10
+	  BLEZ        R25,loop2
+
+	  OR          R11,R10,R0
+	  OR          R10,R14,R0
+	  SW          R11,0(R24)
+
+	  J           loop2
+
+  eloop2:
+	  SW          R10,0(R15)
+	  ADDI        R8,R8,1
+	  J           loop1
+
+  eloop1:
+	  OR          R2,R4,R0
+
+  eplg:
+	  LW          R31,0(R29)
+	  ADDIU       R29,R29,4
+	  JR          R31
+#+END_SRC
+
+Une autre version, par la prof, de son propre aveu assez sale. Mais utilise moins de registres.
+
+#+BEGIN_SRC mips
+  tri:
+	  ADDIU       R29,R29,-20
+	  SW          R31,16(R29)
+	  OR          R2,R4,R0
+	  BEQ         R5,R0,end_extloop   #On sort si le tableau est de taille 0
+	  SLL         R12,R5,2            #Multiplication par 4
+	  ADDU        R12,R12,R4          #Adresse fin de tableau
+
+  extloop:
+	  LW          R8,0(R4)            # max=a[i]
+	  ADDIU       R9,R4,4             # calcul adresse élément i+1
+	  BEQ         R9,R12,end_intloop
+
+  intloop:
+	  LW          R10,0(R9)           # charger a[i+1]
+	  SLTU        R11,R8,R10          # max < a[j]
+	  BEQ         R11,R0,endif
+	  SW          R8,0(R9)            # On peut utiliser deux emplacements mémoire et un registre
+	  OR          R8,R10,R0
+
+  endif:
+	  ADDIU       R9,R9,4             # j++
+	  BNE         R9,R12,intloop
+
+  end_intloop:
+	  SW          R8,0(R4)
+	  ADDIU       R4,R4,4
+	  BNE         R4,R12,extloop
+
+  end_extloop:
+	  LW          R31,16(R29)
+	  ADDIU       R29,R29,20
+	  JR          R31
+#+END_SRC
+
+
+
+
+
+** TD 2
+
+*** Aparté (ancien TD)
+
+Rappel de pipeline
+
+Partie I (Instruction Fetch) :
+On va chercher le mot mémoire et on le met dans le registre IR (Instruction Register)
+
+Partie D (Decode) :
+On découpe l'instruction, on décode les numéros des registres concernés pour les identifier.
+Le PC est manipulé ici, car on sait où est la prochaine instruction :
+Soit PC++, soit saut à la bonne instruction.
+
+Partie E (Execute) :
+On fait les calculs.
+
+Partie M (Memory Access) :
+Seules les instructions Load et Store vont se servir de cet étage : on accède à la mémoire centrale en lecture et en écriture.
+
+Partie W (Writeback) :
+A ce moment seulement le résultat éventuel de l'opération est mis dans le registre destination. On peut aussi modifier ici les registres comme R31.
+
+
+Le fait que les valeurs soient écrites dans le registre seulement à la fin du pipeline pose tout un tas de problème :
+
+
+#+BEGIN_SRC mips
+  loop:   LB          R9,0(R4)
+	  BEQ         R9,R0,end_loop
+	  ADDIU       R4,R4,1
+	  ADDIU       R2,R2,1
+	  J           strlen_loop
+#+END_SRC
+
+Ici, on a un problème :
+
+R9 n'a sa bonne valeur qu'au moment du Writeback de la première instruction, qui arrive bien après le Decode de la deuxième instruction, moment où on a vraiment besoin que sa valeur soit bonne.
+
+La solution naïve, c'est de geler l'instruction : mais si on fait ça, on peut ne pas savoir où on doit aller avant un petit moment, on doit retarder encore la prochaine instruction.
+
+NOP : No operation : une espèce d'opération qui ne fait rien.
+
+On a plusieurs manières de régler ce problème, chacune un peu imparfaite :
+- Solution matérielle : bypass, acheminer la solution où on en a besoin dès qu'on peut (coûteux)
+- Solution logicielle : réordonner les instructions
+- Solution matérielle : Exécution spéculative : on peut commencer à exécuter certaines parties, sans vraiment savoir où on doit aller
+
+#+BEGIN_DEFINITION
+Définitions
+
+Un cycle est donné par le temps nécessaire pour réaliser un étage de pipeline.
+
+On compte le nombres de cycles nécessaires pour finir N instructions (avec N au moins 5 puisqu'on a 5 étages de pipeline). Le nombre minimal de cycles est de N, c'est le meilleur des cas.
+
+Le CPI est défini par : #Cycles / #Instructions terminées
+
+Le CPI utile est défini par : #Cycles / (#Instructions terminées - #Instructions NOP)
+
+Le CPI utile est toujours supérieur au CPI. Plus le CPI est bas, mieux c'est (il ne peut pas valoir moins de 1)
+
+Le CPI et le CPI utile sont *N-glissants* : ils sont définis sur la série des N instructions qu'on a pris comme base. Je shift ces N instructions vers la droite ou la gauche, le CPI bouge un peu.
+
+Pour cette raison, ils sont définis en moyenne.
+#+END_DEFINITION
+
