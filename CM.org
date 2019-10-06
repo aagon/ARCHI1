@@ -910,6 +910,130 @@ La latence, c'est le temps que l'instruction met à se terminer (elle n'a pas ch
 On connaît l'adresse de l'instruction qui suit après D, mais on en a besoin avant ! En fait, l'adresse de l'instruction qui suit est l'adresse de l'instruction i + 2. L'adresse de l'instruction i + 1 est connue dès la fin de l'étage D de l'instruction n - 1.
 
 
+* Cours 3 : 03/10/2019
+
+Toutes les instructions passent par le même schéma d'exécution, qu'on ne rappellera pas ici.
+
+C'est à la condition d'existence d'un schéma unique qu'on peut définir l'optimisation pipeline.
+
+Règles du pipeline (rappels) :
+- Les étages doivent être équilibrés : temps de propagation dans chaque étage doit être à peu près le même.
+- Les étages doivent être séparés par des registres : les étages doivent être compartimentés.
+- Un matéériel quelconque doit appartenir à un étage unique (tous les étages sont en train de travailler à chaque instant : un matériel ne peut pas faire deux choses à la fois)
+
+
+Prenons une instruction simple, et regardons comment elle se comporte dans le pipeline : schéma détaillé, qui montre exactement ce qui se passe dans chaque étage quand j'exécute une instruction.
+
+|          | IFC      |                | DEC    |          | EXE    |        | MEM      |         | WBK |             |
+|----------+----------+----------------+--------+----------+--------+--------+----------+---------+-----+-------------|
+|          |          |                |        |          |        |        | ->       | I_RM    | >-  |             |
+|          |          |                |        |          | ->     | I_RE   | >-       |         |     |             |
+|          |          |                | ->     | I_RD     | >-     |        |          |         |     |             |
+|          | ->       | I_RI           | >-     |          |        |        |          |         |     |             |
+|          |          |                | ->     | R Soper  | >-1    |        |          |         |     |             |
+|          |          |                |        |          | 1+2 -> | RES_RE | >-       |         |     |             |
+|          |          |                | ->     | R Toper  | >-2    |        |          |         |     |             |
+|          |          |                |        | R Ioper  |        |        |          |         |     |             |
+|          |          | 32 R du CPU    | >-     |          |        |        |          |         | ->  | 32 R du CPU |
+|          |          |                |        |          |        |        | ->       | DATA_RM |     |             |
+| R @instr | >-       | R @instruction | >-+4-> | R @instr |        |        |          |         |     |             |
+|          | >-IMEM-> |                |        |          |        |        |          |         |     |             |
+|          |          |                |        |          |        |        | >-DMEM-> |         |     |             |
+
+Chaque trait représente un front d'horloge (montant, le trait descendant est au milieu de deux traits).
+
+Ce genre de schéma permet de s'assurer que deux registres ne soient pas utilisés à deux moments différents.
+
+On a deux matériels combinatoires (le truc dans EXE, et le +4 dans DEC) seulement, mais plein de registres. 70 % de la surface d'un processeur pipeline typique est consacrée aux registres.
+
+Tous les registres sont suffixés par l'étage auquel ils appartiennent (un registre appartient à l'étage qui écrit dedans).
+
+Le principe de ce schéma, c'est de lister le matériel nécessaire à faire une opération (ici, on a seulement dessiné pour ADD et LW).
+En calquant les contraintes pour toutes les instructions, on obtient le schéma complet du matériel : métier de galérien. (et on parle de RISC, pas de CISC)
+
+** Dépendance de branchement
+
+La même chose, pour BEQ :
+
+|          | IFC      |                | DEC       |          | EXE |   | MEM |   | WBK |   |
+|----------+----------+----------------+-----------+----------+-----+---+-----+---+-----+---|
+|          | ->       | I_RI           | >-        |          |     |   |     |   |     |   |
+|          |          |                | ->        | R Soper  |     |   |     |   |     |   |
+|          |          |                | 1=2       |          |     |   |     |   |     |   |
+|          |          |                | ->        | R Toper  |     |   |     |   |     |   |
+|          |          |                |           |          |     |   |     |   |     |   |
+|          |          | 32 R du CPU    | >-1,2     |          |     |   |     |   |     |   |
+|          |          |                |           |          |     |   |     |   |     |   |
+| R @instr | >-       | R @instruction | >-+4 ->   | R @instr |     |   |     |   |     |   |
+|          |          |                | >-+I*4 -> |          |     |   |     |   |     |   |
+|          | >-IMEM-> |                |           |          |     |   |     |   |     |   |
+|          |          |                |           |          |     |   |     |   |     |   |
+
+
+Pour multiplier par une puissance de 2 (a + 2 * b), on peut se contenter de décaler la nappe de l'opérande b vers le poids fort de log_2(facteur)
+
+La technique de calculer +(immédiat * 4) et +4 ne marche que si on sait que l'instruction précédente a bien demandé +4 : on n'a aucun moyen de s'en assurer, ce sera au compilateur de le faire : REJECT IMPORTANT STUFF into COMPILER.
+
+On a un autre problème : au moment ou on a décidé qu'on devait aller ailleurs, l'instruction séquentielle est déjà chargée en registre. Comment on fait :
+- On implémente une solution kill, mais ça coûte du matériel.
+- On ne s'en occupe pas
+
+L'instruction de branchement est retardée (Delayed Slot) : l'instruction séquentielle sera exécutée quoiqu'il arrive, ce qui n'est pas ce qu'on veut.
+
+Une solution, c'est de mettre une opération NOP : certains compilateurs font ça.
+Ou alors on trouve une chose utile à faire : on réarrange l'ordre des opérations : réordonnancement.
+
+Deux contraintes pèsent sur le compilateur :
+
+- L'instruction avant un branchement doit être séquentielle
+- Il faut, autant qu'il est possible, mettre une opération utile dans l'opération qui suit le branchement.
+
+gcc peut se voir demander plusieurs effort d'optimisation (-O). Mais même dans le cas où on lui demande de chercher partout, il n'est pas toujours capable de mettre qqch (25% du temps, il ne peut rien mettre)
+
+Ici, le delayed slot est de 1 : on n'imagine même pas si c'est plus de 1. L'effort demandé au compilateur est encore pire (et impossible à fournir) : pour cette raison, les concepteurs du RISC tenaient à ce que l'adresse de l'instruction à exécuter ensuite soit calculée le plus tôt possible.
+
+** Dépendance de données
+
+On a un autre problème : un moment où une instruction doit consommer une valeur, elle peut ne pas encore avoir été calculée.
+
+On a un délai nécessaire de 3 : c'est au compilateur de s'assurer de ça, sur n'importe quelle fenêtre de 4 instructions : toutes les instructions dans n'importe laquelle de ces fenêtres de 4 instructions doivent être indépendantes deux à deux.
+
+Et ça le compilateur ne peut pas bien le faire.
+
+On va quand même modifier le matériel.
+
+Une idée, c'est de pouvoir bloquer une instruction en cours : injecter des cycles de gel (stall cycle) : pas mieux que la technique des NOP.
+
+#+BEGIN_SRC mips
+	  ADD         $3,$4,$5
+	  ADD         $6,$7,$3
+#+END_SRC
+
+Dans cet exemple-là, ce n'est pas exactement de $3 dont on a besoin, mais du résultat de la somme $4+$5, qui est connue 2 cycles avant $3 (à la fin de EXE).
+
+De la même manière, on a vraiment besoin de cette valeur au début de EXE, pas au début de DEC : il suffit de récupérer le contenu de RES_RE et le passer en deuxième opérande de l'opération +.
+
+Donc en fait, le truc dont on a besoin ($4+$5) est disponible pile au moment où on en a besoin (au début de mon EXE, soit à la fin du EXE de mon t-1).
+
+Soit en fait : (même si cette instruction n'existe pas, RES_RE n'étant pas un registre visible du processeur)
+
+#+BEGIN_SRC mips
+	  ADD         $3,$4,$5
+	  ADD         $6,$7,$RES_RE
+#+END_SRC
+
+Cette technique s'appelle bypass.
+
+Entre quelle zones peut-on/doit-on mettre des bypass :
+
+- W de t avec D de t+3
+- W de t avec E de t+2
+- M de t avec D de t+2
+- M de t avec E de t+1
+
+(* 2, car on a deux opérandes)
+
+
 * Annexes
 
 
