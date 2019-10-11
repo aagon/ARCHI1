@@ -2,7 +2,7 @@
 #+PROPERTY: header-args :mkdirp yes
 #+STARTUP: inlineimages
 
-* TD 1 : 24/09/2019
+* Séance 1 : 24/09/2019
 
 ** TD 1
 
@@ -200,7 +200,7 @@ Voilà notre solution (un certain nombre d'erreurs du tableau ont été corrigé
 On se gardera les exercices bonus pour la suite.
 
 
-* TD 2 : 01/10/2019
+* Séance 2 : 01/10/2019
 
 ** TD 1, suite
 
@@ -436,4 +436,308 @@ Le CPI et le CPI utile sont *N-glissants* : ils sont définis sur la série des 
 
 Pour cette raison, ils sont définis en moyenne.
 #+END_DEFINITION
+
+
+* Séance 3, 08/10/2019
+
+** TD 2
+
+Pipeline (plus compliqué à dessiner).
+On essaie de simplifier les schémas autant qu'il est possible.
+
+*** Exercice 1
+
+On dessine l'instruction SLL rd, rs, rt
+
+|    | IFC    |         | DEC    |          |                   EXE |        | MEM |         | WBK |         |
+|----+--------+---------+--------+----------+-----------------------+--------+-----+---------+-----+---------|
+|    | ->     | I_RI    | >-     | I_RI     |                       |        |     |         |     |         |
+|    |        |         | 1->    | SOPER_RD |                   >-1 |        |     |         |     |         |
+|    |        |         |        |          | ALU : Shift 2 by 1 -> | RES_RE | >-  |         |     |         |
+|    |        |         | 2->    | TOPER_RD |                   >-2 |        |     |         |     |         |
+|    |        |         |        |          |                       |        | ->  | DATA_RM | >-  |         |
+| PC | >-+4-> | PC      | >-+4-> | PC       |                       |        |     |         |     |         |
+|    |        | R_V_CPU | >-1,2  |          |                       |        |     |         | ->  | R_V_CPU |
+
+*** Exercice 2
+
+Même question BLTZAL rs, label
+
+|    | IFC    |         | DEC                                           |          | EXE |        | MEM |         | WBK |            |
+|----+--------+---------+-----------------------------------------------+----------+-----+--------+-----+---------+-----+------------|
+|    | ->     | I_RI    | >-2                                           |          |     |        |     |         |     |            |
+|    |        |         | 1->                                           | SOPER_RD |     |        |     |         |     |            |
+|    |        |         |                                               |          | ->  | RES_RE | >-  |         |     |            |
+|    |        |         | 2->                                           | TOPER_RD |     |        |     |         |     |            |
+|    |        |         |                                               |          |     |        | ->  | DATA_RM | >-  |            |
+|    |        |         |                                               |          |     |        |     |         |     |            |
+|    |        |         |                                               |          |     |        |     |         |     |            |
+| PC | >-+4-> | PC      | >- +4 (si 1 >= 2) ou +4 + (2)*4 (si 1 < 2) -> | PC       |     |        |     |         |     |            |
+|    |        | R_V_CPU | >-1                                           |          |     |        |     |         | ->  | R_V_CPU$31 |
+|    |        |         | ->                      +4 (inconditionné) -> | IOPER_RD | >-  |        |     |         |     |            |
+
+
+La mutliplication par quatre (en fait, toutes les puissances de 2) peut être fait dans l'étage décode.
+
+*** Exercice 3
+
+Une instruction nouvelle, qui n'existe pas dans le MIPS :
+BEQPI (branch if equal and post increment)
+
+BEQPI RS,RT,label
+
+C'est possible, on peut faire le branchement dans DEC et l'incrémentation se fait dans EXE.
+
+C'est possible, l'incrémentation est inconditionnelle.
+
+|    | IFC    |         | DEC                                            |          | EXE  |        | MEM |         | WBK |         |
+|----+--------+---------+------------------------------------------------+----------+------+--------+-----+---------+-----+---------|
+|    | ->     | I_RI    | >-3                                            |          |      |        |     |         |     |         |
+|    |        |         | 1->                                            | SOPER_RD |      |        |     |         |     |         |
+|    |        |         |                                                |          | ->   | RES_RE | >-  |         |     |         |
+|    |        |         | 2->                                            | TOPER_RD | >-++ |        |     |         |     |         |
+|    |        |         |                                                |          |      |        | ->  | DATA_RM | >-  |         |
+|    |        |         |                                                |          |      |        |     |         |     |         |
+|    |        |         |                                                |          |      |        |     |         |     |         |
+| PC | >-+4-> | PC      | >- +4 (si 1 != 2) ou +4 + (3)*4 (si 1 == 2) -> | PC       |      |        |     |         |     |         |
+|    |        | R_V_CPU | >-1 et 2                                       |          |      |        |     |         | ->  | R_V_CPU |
+
+
+*** Exercice 4
+
+Une instruction nouvelle, qui n'existe pas dans le MIPS :
+BEQPD (branch if equal and pre decrement)
+
+BEQPD RS,RT,label
+
+Pas possible : la décrémentation devrait être avant le branchement qui est fait dans l'étage DEC, donc dans l'étage DEC aussi, il faudrait y rajouter un additioneur, ce qui allongerait la durée de l'étage et donc de tous les étages.
+
+A dire vrai, possible mais pas worth.
+
+*** Exercice 5
+
+ADD R3,R2,R1
+ADD R3,R3,R1
+
+A dire vrai, ces deux opérations sont comprimables en 1 :
+
+ADD R3,R2,R1*2
+
+On peut décaler la broche de R1 vers le poids fort de 1.
+
+Mais là n'est pas la question.
+
+|    | IFC    |         | DEC      |          |        EXE |        | MEM |         | WBK |         |
+|----+--------+---------+----------+----------+------------+--------+-----+---------+-----+---------|
+|    | ->     | I_RI    | >-       |          |            |        |     |         |     |         |
+|    |        |         | 1->      | SOPER_RD |        >-1 |        |     |         |     |         |
+|    |        |         |          |          | ALU 1+2 -> | RES_RE | >-  |         |     |         |
+|    |        |         | 2->      | TOPER_RD |        >-2 |        |     |         |     |         |
+|    |        |         |          |          |            |        | ->  | DATA_RM | >-  |         |
+|    |        |         |          |          |            |        |     |         |     |         |
+|    |        |         |          |          |            |        |     |         |     |         |
+| PC | >-+4-> | PC      | >- +4 -> | PC       |            |        |     |         |     |         |
+|    |        | R_V_CPU | >-1 et 2 |          |            |        |     |         | ->  | R_V_CPU |
+
+
+|    | IFC+1  |         | DEC+1    |          |      EXE+1 |        | MEM+1 |         | WBK+1 |         |
+|----+--------+---------+----------+----------+------------+--------+-------+---------+-------+---------|
+|    |        |         |          |          | ->         | I_RE   |       |         |       |         |
+|    |        |         | ->       | I_RD     | >-         |        |       |         |       |         |
+|    | ->     | I_RI    | >-       |          |            |        |       |         |       |         |
+|    |        |         | 1->      | SOPER_RD |        >-1 |        |       |         |       |         |
+|    |        |         |          |          | ALU 1+2 -> | RES_RE | >-    |         |       |         |
+|    |        |         | 2->      | TOPER_RD |        >-2 |        |       |         |       |         |
+|    |        |         |          |          |            |        | ->    | DATA_RM | >-    |         |
+|    |        |         |          |          |            |        |       |         |       |         |
+|    |        |         |          |          |            |        |       |         |       |         |
+| PC | >-+4-> | PC      | >- +4 -> | PC       |            |        |       |         |       |         |
+|    |        | R_V_CPU | >-1 et 2 |          |            |        |       |         | ->    | R_V_CPU |
+
+
+L'idée, c'est de récupérer le contenu de RES_RE de l'instant t pour le mettre dans SOPER_RD.
+En terme de matériel, ça requiert un multiplexeur avec RES_RE et SOPER_RD en entrée et l'additioneur en sortie.
+
+Quelles sont les conditions du mutliplexeurs : on veut comparer RS de l'instruction t et RD de l'instruction t-1.
+
+On devrait avoir la même chose pour l'autre opérande :
+Un multiplexeur avec RES_RE et TOPER_RD en entrée et l'additioneur en sortie.
+
+Dans ce multiplexeur, on veut comparer RT de l'instruction t et RD de l'instruction t-1.
+
+*** Exercice 6
+
+ADD R0, R2, R11
+ADD R3, R0, R11
+
+Ici, on n'est pas censé avoir de problème : on ne peut pas écrire dans R0.
+
+R0 est *toujours à jour !!!!!*, il ne peut jamais être modifié.
+
+On doit préciser la condition du bypass :
+
+on veut comparer RS de l'instruction t et RD de l'instruction t-1, et aucun de ces deux registres n'est le registre 0.
+
+*** Exercice 7
+
+LW R3,0(R2)
+ADD R3,R3,R11
+
+On a R3 disponible et à jour à la fin de l'étage M de l'instruction t.
+On en a besoin au début de l'étage E de l'instruction t+1.
+
+On va avoir besoin d'une instruction de gel.
+
+On va la dessiner, si on peut.
+
+|    | IFC    |         | DEC      |          | EXE        |        | MEM |         | WBK |         |
+|----+--------+---------+----------+----------+------------+--------+-----+---------+-----+---------|
+|    |        |         |          |          |            |        | ->  | I_RM    |     |         |
+|    |        |         |          |          | ->         | I_RE   | >-  |         |     |         |
+|    |        |         | ->       | I_RD     | >-         |        |     |         |     |         |
+|    | *->    | I_RI    | >-       |          |            |        |     |         |     |         |
+|    |        |         | 1->      | SOPER_RD | >-1        |        |     |         |     |         |
+|    |        |         |          |          | ALU 1+2 -> | RES_RE | >-  |         |     |         |
+|    |        |         | 2->      | TOPER_RD |            |        |     |         |     |         |
+|    |        |         |          |          |            |        | *-> | DATA_RM | >-  |         |
+|    |        |         | 3->      | IOPER_RD | >-2        |        |     |         |     |         |
+|    |        |         |          |          |            |        |     |         |     |         |
+| PC | >-+4-> | PC      | >- +4 -> | PC       |            |        |     |         |     |         |
+|    |        | R_V_CPU | >-1 et 2 |          |            |        |     |         | ->  | R_V_CPU |
+
+
+|    | IFC+1  |         | DEC+1    |          | GEL  |          | EXE +1 |        | MEM+1 |         | WBK+1 |         |
+|----+--------+---------+----------+----------+------+----------+--------+--------+-------+---------+-------+---------|
+|    |        |         |          |          |      |          |        |        | ->    | I_RM    |       |         |
+|    |        |         |          |          |      |          | ->     | I_RE   | >-    |         |       |         |
+|    |        |         | ->       | I_RD     | >--> | I_RD     | >-     |        |       |         |       |         |
+|    | ->     | I_RI    | >-       |          |      |          |        |        |       |         |       |         |
+|    |        |         | 1->      | SOPER_RD | >--> | SOPER_RD | >-1    |        |       |         |       |         |
+|    |        |         |          |          |      |          | 1+2->  | RES_RE | >-    | RES     |       |         |
+|    |        |         | 2->      | TOPER_RD | >--> | TOPER_RD | >-2    |        |       |         |       |         |
+|    |        |         |          |          |      |          |        |        | ->    | DATA_RM | >-    |         |
+|    |        |         |          |          |      |          |        |        |       |         |       |         |
+|    |        |         |          |          |      |          |        |        |       |         |       |         |
+| PC | >-+4-> | PC      | >- +4 -> | PC       |      |          |        |        |       |         |       |         |
+|    |        | R_V_CPU | >-1 et 2 |          |      |          |        |        |       |         | ->    | R_V_CPU |
+
+Le cycle de gel est déclenché sssi (une partie masquée de) I_RD @t == (une partie masquée de) I_RE @t-1
+
+*** Exercice 8
+
+#+BEGIN_SRC mips
+	  ADDIU       $2,$0,4
+	  LUI         $3,0x00c
+	  ADD         $2,$2,$2
+	  ORI         $3,$3, 0x4568
+	  LW          $2,0($3)
+	  LBU         $2,0($2)
+	  ORI         $2,$2, 0x0001
+	  BLTZAL      $2,suite
+	  ADDU        $0,$0,$0
+  suite:
+	  JR          $31
+	  ADDU        $31,$31,-8
+#+END_SRC
+
+Dépendances :
+
+- La 3 de la 1
+- La 4 de la 2
+- La 5 de la 4 et de la 3
+- La 6 de la 5
+- La 7 de la 6
+- La 8 de la 7
+
+- La 10 dépend de la 8 (BLTZAL)
+- La 11 est exécutée no matter what, malgré le jump (delayed slot)
+
+Schéma simplifié :
+
+|        | 1 | 2 | 3 | 4     | 5     | 6    | 7     | 8     | 9    | 10    | 11       | 12   | 13    | 14    | 15   | 16    | 17    | 18   | 19 | 20 | 21 |
+|--------+---+---+---+-------+-------+------+-------+-------+------+-------+----------+------+-------+-------+------+-------+-------+------+----+----+----|
+| ADDIU  | I | D | E | M >-2 | W     |      |       |       |      |       |          |      |       |       |      |       |       |      |    |    |    |
+| LUI    |   | I | D | E     | M >-2 | W    |       |       |      |       |          |      |       |       |      |       |       |      |    |    |    |
+| ADD    |   |   | I | D     | E     | -> M | W     |       |      |       |          |      |       |       |      |       |       |      |    |    |    |
+| ORI    |   |   |   | I     | D     | -> E | M >-1 | W     |      |       |          |      |       |       |      |       |       |      |    |    |    |
+| LW     |   |   |   |       | I     | D    | -> E  | M >-1 | W    |       |          |      |       |       |      |       |       |      |    |    |    |
+| LBU    |   |   |   |       |       | I    | D     | O     | -> E | M >-1 | W        |      |       |       |      |       |       |      |    |    |    |
+| ORI    |   |   |   |       |       |      | I     | O     | D    | O     | -> E >-1 | M    | W     |       |      |       |       |      |    |    |    |
+| BLTZAL |   |   |   |       |       |      |       | O     | I    | O     | O        | -> D | E >-2 | M >-3 | W    |       |       |      |    |    |    |
+| ADDU   |   |   |   |       |       |      |       |       |      |       |          | I    | D     | E     | M    | W     |       |      |    |    |    |
+| JR     |   |   |   |       |       |      |       |       |      |       |          |      | I     | -> D  | E    | M     | W     |      |    |    |    |
+| ADDU   |   |   |   |       |       |      |       |       |      |       |          |      |       | I     | -> D | E >-1 | M >-2 | W    |    |    |    |
+| JK     |   |   |   |       |       |      |       |       |      |       |          |      |       |       | I    | O     | -> D  | E    | M  | W  |    |
+| ADDU   |   |   |   |       |       |      |       |       |      |       |          |      |       |       |      | O     | I     | -> D | E  | M  |  W |
+
+*** Exercice 9
+
+Ordre 1 : E@t -> E@t+1
+
+|                    | 1 | 2 | 3     | 4    | 5 | 6 |   |
+|--------------------+---+---+-------+------+---+---+---|
+| ORI R3, R4, 0x0001 | I | D | E >-1 | M    | W |   |   |
+| LW R5, 0(R3)       |   | I | D     | -> E | M | W |   |
+
+Ici, le bypass est du côté RS
+
+Pour un bypass nécessaire en RT, on regardera :
+
+#+BEGIN_SRC mips
+	  ORI         $3,$4,0x0001
+	  ADD         $5,$6,$3
+#+END_SRC
+
+Ordre 2 : M@t -> E@t+2
+
+|                | 1 | 2 | 3 | 4     | 5    | 6 | 7 |
+|----------------+---+---+---+-------+------+---+---|
+| LW R3, 0(R5)   | I | D | E | M >-2 | W    |   |   |
+| NOP            |   | I | D | E     | M    | W |   |
+| ADD R6, R3, R0 |   |   | I | D     | -> E | M | W |
+
+Pour un bypass nécessaire en RT, on regardera :
+
+#+BEGIN_SRC mips
+	  LW          $3,0($5)
+	  NOP
+	  ADD         $6,$0,$3
+#+END_SRC
+
+Ordre 2 : E@t -> D@t+2
+
+|                   | 1 | 2 | 3     | 4    | 5 | 6 | 7 |
+|-------------------+---+---+-------+------+---+---+---|
+| ADD R3, R4, R5    | I | D | E >-2 | M    | W |   |   |
+| NOP               |   | I | D     | E    | M | W |   |
+| BEQ R3, R7, label |   |   | I     | -> D | E | M | W |
+
+#+BEGIN_SRC mips
+	  ADD         $3,$4,$5
+	  NOP
+	  BEQ         $7,$3,label
+#+END_SRC
+
+Ordre 3 : M@t -> D@t+3
+
+|                   | 1 | 2 | 3 | 4     | 5    | 6 | 7 | 8 |
+|-------------------+---+---+---+-------+------+---+---+---|
+| LW R3, 0(R5)      | I | D | E | M >-3 | W    |   |   |   |
+| NOP               |   | I | D | E     | M    | W |   |   |
+| NOP               |   |   | I | D     | E    | M | W |   |
+| BEQ R3, R7, label |   |   |   | I     | -> D | E | M | W |
+
+Pour un autre exemple, avec RT :
+
+#+BEGIN_SRC mips
+	  LW          $3,0($5)
+	  NOP
+	  NOP
+	  BEQ         $6,$3,label
+#+END_SRC
+
+*** Exercice 10
+
+[pour s'entraîner]
+
 

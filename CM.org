@@ -4,7 +4,7 @@
 
 Pirouz Bazargan-Sabet (pirouz.bazargan-sabet@lip6.fr)
 partagé avec :
-Karine Haydeman (karine.haydeman@lip6.fr)
+Karine Heydemann (karine.heydemann@lip6.fr)
 
 4I100
 
@@ -1034,7 +1034,53 @@ Entre quelle zones peut-on/doit-on mettre des bypass :
 (* 2, car on a deux opérandes)
 
 
+* Cours 4 : 10/10/2019
+
+** Pipeline
+
+#+BEGIN_DEFINITION
+Deux instructions 
+
+Deux types :
+- Dépendances de données : opérandes en commun
+- Dépendances de contrôle : une instruction est à exécuter seulement suivant 
+#+END_DEFINITION
+
+RAW
+
+WAW
+
+WAR
+
+Pas de bypass entrant en MEM !
+
+Page 20 [refaire le schéma simplifié]
+
+[refaire l'optimisation]
+
+Déroulage de boucle à bas niveau :
+
+Bien réécrire les dépendances.
+
+Réécrire le schéma simplifié.
+
+
+Problèmes de déroulage :
+- Empreinte mémoire dans la section de texte
+- Renommage des registres
+- Les défauts de cache
+
+Flot de contrôle.
+
+Bloc de base.
+
+On ne sépare pas un branchement interne de ses blocs successeurs.
+
+
 * Annexes
 
+Support de cours :
+
+[[./CM4/cours4.pdf][Cours Karine 1]]
 
 
