@@ -1024,33 +1024,60 @@ Soit en fait : (même si cette instruction n'existe pas, RES_RE n'étant pas un 
 
 Cette technique s'appelle bypass.
 
-Entre quelle zones peut-on/doit-on mettre des bypass :
+Entre quelle zones peut-on/doit-on mettre des bypass ?
 
-- W de t avec D de t+3
-- W de t avec E de t+2
-- M de t avec D de t+2
-- M de t avec E de t+1
+- E@t -> E@t+1
+- M@t -> E@t+2
+- E@t -> D@t+2
+- M@t -> D@t+3
 
 (* 2, car on a deux opérandes)
 
 
 * Cours 4 : 10/10/2019
 
-** Pipeline
+*** Pipeline
 
 #+BEGIN_DEFINITION
-Deux instructions 
+Pipeline
 
-Deux types :
-- Dépendances de données : opérandes en commun
-- Dépendances de contrôle : une instruction est à exécuter seulement suivant 
+- Le traitement nécessaire à l'exécution d'un programme est découpé en étapes
+- Un étage de pipeline par étape. On définit le cycle comme le temps nécessaire à la traversée de l'étage le plus long. Un étage, quel qu'il soit, est supposé durer un cycle (donc avoir des cycles plus rapides que d'autre ne sert à rien)
+- A chaque cycle, une instruction commence son exécution, pas besoin d'attendre la fin de l'exécution précédente, qui prend donc (au moins) 5 cycles (5 étages).
 #+END_DEFINITION
 
-RAW
+#+BEGIN_THEOREM
+- Les étages fonctionnent en parallèle : Si l'étage IFC de l'instruction i est exécuté à un temps précis, on a en même temps l'étage DEC de l'instruction i-1, l'étage EXE de l'instruction i-2, etc...
+- Les instructions entrent une par une dans le pipeline, dans l'ordre qui est donné par le programme
+- Les instructions sortent une par une du pipeline, dans l'ordre qui est donné par le programme (le même ordre que celui dans lequel elles sont rentrées)
+#+END_THEOREM
 
-WAW
+Idéalement, on aurait une instruction terminée à chaque cycle, soit un CPI de 1.
 
-WAR
+*** Dépendances
+
+#+BEGIN_DEFINITION
+Deux instructions sont dites dépendantes si l'une doit être exécutée avant l'autre pour que le programme fasse bien ce qu'on demande.
+
+On distingue les dépendances en deux types :
+- Dépendances de données : opérandes en commun entre les deux instructions considérées
+- Dépendances de contrôle : une des deux instructions est à exécuter seulement suivant le résultat de l'autre
+#+END_DEFINITION
+
+**** Dépendances de données
+
+On distingue trois cas de dépendances de données :
+- La dépendance RAW : Read after Write (on écrit ça i_{1} \to_{RAW} i_{2}). Signifie que i_{1} écrit dans un registre et que i_{2} lit dans ce registre. Utilisation d'un résultat précédent.
+- La dépendance WAW : Write after Write (on écrit ça i_{1} \to_{WAW} i_{2}). Signifie que i_{1} écrit dans un registre et que i_{2} écrit dans ce même registre. Réutilisation d'un registre.
+- La dépendance WAR : Write after Read (on écrit ça i_{1} \to_{WAR} i_{2}). Signifie que i_{1} lit dans un registre et que i_{2} écrit dans ce registre. Réutilisation d'un registre.
+
+#+BEGIN_THEOREM
+Dans les trois cas considérés (*LES TROIS !*), si on inverse l'ordre dans lequel i_1 et i_2 sont exécutés, on change le sens ("la sémantique") du programme, on change en général ce que le programme fait (sauf si on a vraiment de la chance).
+#+END_THEOREM
+
+**** Dépendances de contrôle
+
+
 
 Pas de bypass entrant en MEM !
 

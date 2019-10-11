@@ -445,13 +445,49 @@ Pour cette raison, ils sont définis en moyenne.
 Pipeline (plus compliqué à dessiner).
 On essaie de simplifier les schémas autant qu'il est possible.
 
+*** Aparté : notes sur le formalisme utilisé
+
+On essaie autant qu'il est possible de tout pouvoir dessiner en caractères ASCII.
+
+On utilisera les fonctionnalités des tableaux dans org-mode.
+
+Les étages de pipeline sont dans une colonne chacun. On introduit des colonnes avant et après chaque étage, pour montrer les registres interétages.
+
+Il est +compliqué+ impossible de faire des flèches courbes. Pour cette raison, on notera >- une sortie de registre et -> et une entrée de registre. Si, dans un même étage de pipeline, plusieurs contenus de registre sont tranférés, on codera les flèches avec un chiffre :
+>-1
+1->
+(on comprend bien qu'on doit faire partir une flèche du registre de la première ligne pour aller dans le registre de la deuxième)
+
+Les opérateurs et les multiplexeurs ne sont pas dessinés, ils sont donnés formellement en texte. Par exemple, pour expliquer qu'on a un opérateur d'incrémentation +4 entre le registre PC avant IFC et le registre PC après IFC, on ne peut pas faire un gros rond avec un +4 dedans. On se contentera d'écrire la chose parfaitement lisible suivante :
+
+|    | IFC    |    |
+| PC | >-+4-> | PC |
+
+Ca marche aussi avec les multiplexeurs, qui ne font que vérifier des conditions logiques sur des contenus de registre connus de l'étage en question (donc déjà dessinés dans la colonne en question). Pour coder que l'opération du registre PC avant DEC vers le registre PC après RC dépend d'une condition dépendant des opérandes (dans le cas d'une instruction de type branch avec immédiat) on écrira :
+
+BLTZAL (on n'a pas mis qu'on met ):
+
+|         | DEC                                           |          |
+| I_RI    | >-2                                           |          |
+|         | 1->                                           | SOPER_RD |
+|         | 2->                                           | TOPER_RD |
+|         |                                               |          |
+| PC      | >- +4 (si 1 >= 2) ou +4 + (2)*4 (si 1 < 2) -> | PC       |
+| R_V_CPU | >-1                                           |          |
+
+C'est un peu plus verbeux, mais encore parfaitement compréhensible (on pourrait raccourcir l'écriture avec un opérateur ternaire).
+
+Les lignes du tableau donnent les registres : on est parfaitement capable de respecter le formalisme Pirouzien qui suppose que le registre à une ligne donnée est toujours bien le même registre. Vu que le nombre de registres dans un pipeline MIPS est fini et potentiellement connu, le nombre de lignes maximum du tableau pourrait théoriquement être ainsi donné.
+
+Le seule vrai problème de ce formalisme est qu'il n'est pas possible d'y faire figurer le déroulement de plusieurs instructions. On est obligé de faire plusieurs tableaux (un schéma détaillé avec plus d'une instruction est illisible de toutes façons).
+
 *** Exercice 1
 
 On dessine l'instruction SLL rd, rs, rt
 
 |    | IFC    |         | DEC    |          |                   EXE |        | MEM |         | WBK |         |
 |----+--------+---------+--------+----------+-----------------------+--------+-----+---------+-----+---------|
-|    | ->     | I_RI    | >-     | I_RI     |                       |        |     |         |     |         |
+|    | ->     | I_RI    | >-->   | I_RI     |                       |        |     |         |     |         |
 |    |        |         | 1->    | SOPER_RD |                   >-1 |        |     |         |     |         |
 |    |        |         |        |          | ALU : Shift 2 by 1 -> | RES_RE | >-  |         |     |         |
 |    |        |         | 2->    | TOPER_RD |                   >-2 |        |     |         |     |         |
@@ -474,10 +510,10 @@ Même question BLTZAL rs, label
 |    |        |         |                                               |          |     |        |     |         |     |            |
 | PC | >-+4-> | PC      | >- +4 (si 1 >= 2) ou +4 + (2)*4 (si 1 < 2) -> | PC       |     |        |     |         |     |            |
 |    |        | R_V_CPU | >-1                                           |          |     |        |     |         | ->  | R_V_CPU$31 |
-|    |        |         | ->                      +4 (inconditionné) -> | IOPER_RD | >-  |        |     |         |     |            |
+|    |        |         | >-                      +4 (inconditionné) -> | IOPER_RD | >-  |        |     |         |     |            |
 
 
-La mutliplication par quatre (en fait, toutes les puissances de 2) peut être fait dans l'étage décode.
+La multiplication par quatre (en fait, toutes les puissances de 2) peut être fait dans l'étage décode.
 
 *** Exercice 3
 
@@ -501,7 +537,6 @@ C'est possible, l'incrémentation est inconditionnelle.
 |    |        |         |                                                |          |      |        |     |         |     |         |
 | PC | >-+4-> | PC      | >- +4 (si 1 != 2) ou +4 + (3)*4 (si 1 == 2) -> | PC       |      |        |     |         |     |         |
 |    |        | R_V_CPU | >-1 et 2                                       |          |      |        |     |         | ->  | R_V_CPU |
-
 
 *** Exercice 4
 
@@ -576,7 +611,8 @@ R0 est *toujours à jour !!!!!*, il ne peut jamais être modifié.
 
 On doit préciser la condition du bypass :
 
-on veut comparer RS de l'instruction t et RD de l'instruction t-1, et aucun de ces deux registres n'est le registre 0.
+Le bypass est déclenché sssi RS de l'instruction i égale RD de l'instruction i-1 et tous deux sont différents de 0.
+(on a le même pour le registre RT, on se doute)
 
 *** Exercice 7
 
@@ -589,6 +625,7 @@ On en a besoin au début de l'étage E de l'instruction t+1.
 On va avoir besoin d'une instruction de gel.
 
 On va la dessiner, si on peut.
+(edit : on peut, une instruction de gel consiste en l'écrasement des valeurs des registres interétage par elles-mêmes)
 
 |    | IFC    |         | DEC      |          | EXE        |        | MEM |         | WBK |         |
 |----+--------+---------+----------+----------+------------+--------+-----+---------+-----+---------|
@@ -623,6 +660,10 @@ On va la dessiner, si on peut.
 
 Le cycle de gel est déclenché sssi (une partie masquée de) I_RD @t == (une partie masquée de) I_RE @t-1
 
+En gros, on compare une partie bien précise de l'instruction stockée dans I_RD avec une partie bien précise de l'instruction stockée dans I_RE (qui concerne donc l'instruction précédente).
+
+Quelle partie bien précise ? On suppose que le matériel sait faire le masque/filtre pour comparer bit à bit. C'est ce qui était entendu par l'expression (une partie masquée de)
+
 *** Exercice 8
 
 #+BEGIN_SRC mips
@@ -654,23 +695,34 @@ Dépendances :
 
 Schéma simplifié :
 
-|        | 1 | 2 | 3 | 4     | 5     | 6    | 7     | 8     | 9    | 10    | 11       | 12   | 13    | 14    | 15   | 16    | 17    | 18   | 19 | 20 | 21 |
-|--------+---+---+---+-------+-------+------+-------+-------+------+-------+----------+------+-------+-------+------+-------+-------+------+----+----+----|
-| ADDIU  | I | D | E | M >-2 | W     |      |       |       |      |       |          |      |       |       |      |       |       |      |    |    |    |
-| LUI    |   | I | D | E     | M >-2 | W    |       |       |      |       |          |      |       |       |      |       |       |      |    |    |    |
-| ADD    |   |   | I | D     | E     | -> M | W     |       |      |       |          |      |       |       |      |       |       |      |    |    |    |
-| ORI    |   |   |   | I     | D     | -> E | M >-1 | W     |      |       |          |      |       |       |      |       |       |      |    |    |    |
-| LW     |   |   |   |       | I     | D    | -> E  | M >-1 | W    |       |          |      |       |       |      |       |       |      |    |    |    |
-| LBU    |   |   |   |       |       | I    | D     | O     | -> E | M >-1 | W        |      |       |       |      |       |       |      |    |    |    |
-| ORI    |   |   |   |       |       |      | I     | O     | D    | O     | -> E >-1 | M    | W     |       |      |       |       |      |    |    |    |
-| BLTZAL |   |   |   |       |       |      |       | O     | I    | O     | O        | -> D | E >-2 | M >-3 | W    |       |       |      |    |    |    |
-| ADDU   |   |   |   |       |       |      |       |       |      |       |          | I    | D     | E     | M    | W     |       |      |    |    |    |
-| JR     |   |   |   |       |       |      |       |       |      |       |          |      | I     | -> D  | E    | M     | W     |      |    |    |    |
-| ADDU   |   |   |   |       |       |      |       |       |      |       |          |      |       | I     | -> D | E >-1 | M >-2 | W    |    |    |    |
-| JK     |   |   |   |       |       |      |       |       |      |       |          |      |       |       | I    | O     | -> D  | E    | M  | W  |    |
-| ADDU   |   |   |   |       |       |      |       |       |      |       |          |      |       |       |      | O     | I     | -> D | E  | M  |  W |
+|        | 1 | 2 | 3 | 4     | 5     | 6        | 7    | 8     | 9    | 10    | 11       | 12   | 13    | 14    | 15   | 16    | 17    | 18   | 19 | 20 | 21 |
+|--------+---+---+---+-------+-------+----------+------+-------+------+-------+----------+------+-------+-------+------+-------+-------+------+----+----+----|
+| ADDIU  | I | D | E | M >-2 | W     |          |      |       |      |       |          |      |       |       |      |       |       |      |    |    |    |
+| LUI    |   | I | D | E     | M >-2 | W        |      |       |      |       |          |      |       |       |      |       |       |      |    |    |    |
+| ADD    |   |   | I | D     | -> E  | M        | W    |       |      |       |          |      |       |       |      |       |       |      |    |    |    |
+| ORI    |   |   |   | I     | D     | -> E >-1 | M    | W     |      |       |          |      |       |       |      |       |       |      |    |    |    |
+| LW     |   |   |   |       | I     | D        | -> E | M >-1 | W    |       |          |      |       |       |      |       |       |      |    |    |    |
+| LBU    |   |   |   |       |       | I        | D    | O     | -> E | M >-1 | W        |      |       |       |      |       |       |      |    |    |    |
+| ORI    |   |   |   |       |       |          | I    | O     | D    | O     | -> E >-1 | M    | W     |       |      |       |       |      |    |    |    |
+| BLTZAL |   |   |   |       |       |          |      | O     | I    | O     | O        | -> D | E >-2 | M >-3 | W    |       |       |      |    |    |    |
+| ADDU   |   |   |   |       |       |          |      |       |      |       |          | I    | D     | E     | M    | W     |       |      |    |    |    |
+| JR     |   |   |   |       |       |          |      |       |      |       |          |      | I     | -> D  | E    | M     | W     |      |    |    |    |
+| ADDU   |   |   |   |       |       |          |      |       |      |       |          |      |       | I     | -> D | E >-1 | M >-2 | W    |    |    |    |
+| JK     |   |   |   |       |       |          |      |       |      |       |          |      |       |       | I    | O     | -> D  | E    | M  | W  |    |
+| ADDU   |   |   |   |       |       |          |      |       |      |       |          |      |       |       |      | O     | I     | -> D | E  | M  |  W |
+
+Quel est le CPI de cette série d'instructions ?
+
+D'après Karine, on commence à compter à partir de la sortie de la première instruction considérée (on part du principe que ce qui était avant concernait d'autres instructions, ce qui est vrai) jusqu'à la sortie de la dernière instruction.
+
+#Cycles = 21 - 5 = 16
+#Instruction = 13
+
+CPI = 13/16
 
 *** Exercice 9
+
+On profite de cet exercice pour lister les bypass du pipeline MIPS. On définit l'ordre du bypass comme le nombre d'étages de pipeline que le bypass permet de traverser (ordre 2 : le bypass permet d'obtenir une information située 2 étages plus loin)
 
 Ordre 1 : E@t -> E@t+1
 
@@ -681,7 +733,7 @@ Ordre 1 : E@t -> E@t+1
 
 Ici, le bypass est du côté RS
 
-Pour un bypass nécessaire en RT, on regardera :
+Pour un bypass nécessaire en RT, on regardera par exemple :
 
 #+BEGIN_SRC mips
 	  ORI         $3,$4,0x0001
@@ -696,7 +748,7 @@ Ordre 2 : M@t -> E@t+2
 | NOP            |   | I | D | E     | M    | W |   |
 | ADD R6, R3, R0 |   |   | I | D     | -> E | M | W |
 
-Pour un bypass nécessaire en RT, on regardera :
+Pour un bypass nécessaire en RT, on regardera par exemple :
 
 #+BEGIN_SRC mips
 	  LW          $3,0($5)
@@ -711,6 +763,8 @@ Ordre 2 : E@t -> D@t+2
 | ADD R3, R4, R5    | I | D | E >-2 | M    | W |   |   |
 | NOP               |   | I | D     | E    | M | W |   |
 | BEQ R3, R7, label |   |   | I     | -> D | E | M | W |
+
+Pour un bypass nécessaire en RT, on regardera par exemple :
 
 #+BEGIN_SRC mips
 	  ADD         $3,$4,$5
@@ -727,7 +781,7 @@ Ordre 3 : M@t -> D@t+3
 | NOP               |   |   | I | D     | E    | M | W |   |
 | BEQ R3, R7, label |   |   |   | I     | -> D | E | M | W |
 
-Pour un autre exemple, avec RT :
+Pour un bypass nécessaire en RT, on regardera par exemple :
 
 #+BEGIN_SRC mips
 	  LW          $3,0($5)
@@ -735,6 +789,8 @@ Pour un autre exemple, avec RT :
 	  NOP
 	  BEQ         $6,$3,label
 #+END_SRC
+
+On a bien vu les 8 (4*2) bypass du pipeline MIPS.
 
 *** Exercice 10
 
