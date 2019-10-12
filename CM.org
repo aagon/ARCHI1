@@ -1036,7 +1036,7 @@ Entre quelle zones peut-on/doit-on mettre des bypass ?
 
 * Cours 4 : 10/10/2019
 
-*** Pipeline
+** Pipeline
 
 #+BEGIN_DEFINITION
 Pipeline
@@ -1054,7 +1054,7 @@ Pipeline
 
 Idéalement, on aurait une instruction terminée à chaque cycle, soit un CPI de 1.
 
-*** Dépendances
+** Dépendances
 
 #+BEGIN_DEFINITION
 Deux instructions sont dites dépendantes si l'une doit être exécutée avant l'autre pour que le programme fasse bien ce qu'on demande.
@@ -1064,7 +1064,19 @@ On distingue les dépendances en deux types :
 - Dépendances de contrôle : une des deux instructions est à exécuter seulement suivant le résultat de l'autre
 #+END_DEFINITION
 
-**** Dépendances de données
+*** Dépendances de contrôle
+
+#+BEGIN_DEFINITION
+L'exécution d'une instruction i_2 située après une instruction i_1 dépend du résultat de cette dernière.
+
+Le résultat d'un branchement (conditionné comme inconditionné) est connu à la fin de l'étage decode (DEC), soit un cycle *après* l'entrée de l'instruction séquentielle dans le pipeline.
+
+On a donc un *delayed slot* après chaque branchement (conditionné comme inconditionné). Jugé plus économe que de flush lors de la fin de l'étage decode l'instruction entrée dans le pipeline alors qu'elle ne le devait pas (ce qui est fait sur des processeurs plus récents d'après Karine).
+
+La performance est limitée : une instruction qui ne sert à rien occupe un cycle du processeur. (moins grave cependant qu'un cycle de gel, qui bloque tout le pipeline)
+#+END_DEFINITION
+
+*** Dépendances de données
 
 On distingue trois cas de dépendances de données :
 - La dépendance RAW : Read after Write (on écrit ça i_{1} \to_{RAW} i_{2}). Signifie que i_{1} écrit dans un registre et que i_{2} lit dans ce registre. Utilisation d'un résultat précédent.
@@ -1075,33 +1087,503 @@ On distingue trois cas de dépendances de données :
 Dans les trois cas considérés (*LES TROIS !*), si on inverse l'ordre dans lequel i_1 et i_2 sont exécutés, on change le sens ("la sémantique") du programme, on change en général ce que le programme fait (sauf si on a vraiment de la chance).
 #+END_THEOREM
 
-**** Dépendances de contrôle
+#+BEGIN_DEFINITION
+On dit qu'on a un aléa dans le pipeline quand une donnée doit être *récupérée* (plutôt que consommée, attention) avant (au sens temporel du terme) sa production dans une des instructions précédente.
+
+L'aléa ne peut être réglé que par l'introduction d'un cycle de gel à la place du cycle de pipeline de l'étage consommateur (répercuté bien entendu dans tous les étages de pipeline précédant celui-ci)
+#+END_DEFINITION
+
+#+BEGIN_THEOREM
+Une dépendance de données n'introduit pas nécessairement d'aléa dans le pipeline. On peut parfaitement avoir une dépendance de données dans le code (ce qui signifie, on le rappelle, qu'intervertir les deux instructions changerait la sémantique du programme) sans que la production de la donnée de l'instruction avant arrive trop tard pour être récupérée à temps par l'instruction après.
+#+END_THEOREM
+
+Par exemple :
+
+- WAW. L'écriture dans un registre est considérée finie à la fin de l'étage WBK. L'écriture suivante dans le même registre par n'importe quelle instruction future se fera forcément après (à la fin de l'étage WBK de l'instruction en question) :
+
+| IFC | DEC | EXE | MEM | WBK (ici) |           |
+|     | IFC | DEC | EXE | MEM       | WBK (ici) |
+
+Pas de problème : et à plus forte raison si on considère une instruction située encore plus loin.
+
+- WAR. La lecture des registres opérandes du banc de registre se fait dans l'étage DEC. L'écriture dans un de ces deux registres opérandes du banc de registre par n'importe quelle instruction future se fera forcément après (à la fin de l'étage WBK de l'instruction en question) :
+
+| IFC | DEC (ici) | EXE | MEM | WBK |           |
+|     | IFC       | DEC | EXE | MEM | WBK (ici) |
+
+Pas de problème : et à plus forte raison si on considère une instruction située encore plus loin.
+
+Par contre, les problèmes d'aléa dans le pipeline arrivent avec la dépendance de données RAW :
+
+On a besoin de lire les registres opérandes du banc de registre au début de l'étage DEC. Or, si l'écriture dans ces registres se fait au WBK de l'instruction précédente, par exemple, ce ne sera pas prêt à temps :
+
+| IFC | DEC | EXE       | MEM | WBK (ici) |     |
+|     | IFC | (ici) DEC | EXE | MEM       | WBK |
+
+Dans l'exemple donné, on a besoin de ce que WBK de l'instruction d'avant produit trois cycles avant qu'il soit effectivement produit.
+
+Il faut trouver une manière d'accélérer la transmission des résultats aux opérandes !
+
+Notion de *bypass*
+
+*** Bypass
+
+On a un nombre limité d'opérations dans le MIPS, regardons chaque opération distinctement :
+
+ALU (Arithmetic and Logical Unit) :
+
+#+BEGIN_SRC mips
+	  ADD         $2, $4, $3
+	  ADDI        $5, $2, 10
+#+END_SRC
+
+Dans notre exemple, on a effectivement produit le résultat de l'opération de la première instruction à la fin de l'étage EXE, et on en a besoin au début de l'étage EXE de la seconde instruction (soit au même moment). Un bypass de EXE fin à EXE début règle le problème, et permet d'éviter le cycle de gel :
+
+| IFC | DEC | EXE >-1 | MEM    | WBK |     |
+|     | IFC | DEC     | -> EXE | MEM | WBK |
+
+LOAD :
+
+#+BEGIN_SRC mips
+	  LW          $2, 0($4)
+	  ADDI        $5, $2, 10
+#+END_SRC
+
+Dans notre exemple, on a effectivement produit le résultat de l'opération de la première instruction à la fin de l'étage MEM, et on en a besoin au début de l'étage EXE de la seconde instruction (soit un cycle avant). Un bypass de MEM fin à EXE début diminue le problème, et permet de n'avoir à mettre qu'un cycle de gel :
+
+| IFC | DEC | EXE | MEM >-1 | WBK    |     |     |
+|     | IFC | DEC | O       | -> EXE | MEM | WBK |
+
+BRANCH :
+
+#+BEGIN_SRC mips
+	  ADD         $2, $4, $3
+	  BEQ         $5, $2, loop
+#+END_SRC
+
+Dans notre exemple, on a effectivement produit le résultat de l'opération de la première instruction à la fin de l'étage EXE, et on en a besoin au début de l'étage DEC de la seconde instruction (soit un cycle avant). Un bypass de EXE fin à DEC début diminue le problème, et permet de n'avoir à mettre qu'un cycle de gel :
+
+| IFC | DEC | EXE >-1 | MEM    | WBK |     |     |
+|     | IFC | O       | -> DEC | EXE | MEM | WBK |
+
+Deuxième exemple :
+
+#+BEGIN_SRC mips
+	  LW          $2, 0($3)          
+	  BEQ         $5, $2, loop
+#+END_SRC
+
+Dans notre exemple, on a effectivement produit le résultat de l'opération de la première instruction à la fin de l'étage MEM, et on en a besoin au début de l'étage DEC de la seconde instruction (soit deux cycles avant). Un bypass de MEM fin à DEC début diminue le problème, et permet de n'avoir à mettre que deux cycles de gel :
+
+| IFC | DEC | EXE | MEM >-1 | WBK    |     |     |     |
+|     | IFC | O   | O       | -> DEC | EXE | MEM | WBK |
+
+STORE :
+
+#+BEGIN_SRC mips
+	  ADDI        $2, $3, 1
+	  SW          $2, 0($4)
+#+END_SRC
+
+Dans notre exemple, on a effectivement produit le résultat de l'opération de la première instruction à la fin de l'étage EXE, et on en a besoin au début de l'étage MEM de l'instruction suivante. On pourrait aussi envisager d'en avoir besoin au début de l'étage EXE de l'instruction suivante :
+
+En effet, les opérations de type STORE consomment l'opérande RS (ici, $4) en EXE (pour calculer l'adresse à laquelle enregistrer), et l'opérande RT (ici $2) en MEM.
+
+On a déjà un bypass de EXE fin à EXE début, donc le cas 2 est réglé.
+
+Pour le cas 1, va-t-on mettre un bypass de EXE fin à MEM début ?
+Non, pour deux raisons :
+- C'est déjà le chemin naturel des données (une donnée passe de EXE fin à MEM début sans avoir besoin de quelque bypass) *dans notre cas*
+- Raison plus générale : MEM est un étage critique (la criticité des étages, en décroissant : MEM, IF, DEC, EXE). On ne peut pas se permettre d'allonger encore la durée de l'étage MEM en y introduisant un bypass en entrée qui supposerait un multiplexeur et le matériel logique qui permettrait de le contrôler.
+
+Pour cette raison, on ne met pas de bypass entrant en MEM : on préfèrera mettre un bypass entrant en EXE, même pour récupérer des données qui ne seront utilisées qu'en MEM.
+
+Dans notre cas, ça n'induit pas de cycle de gel (on est dans le cas d'un bypass EXE fin vers EXE début, vu plus haut).
+
+Mais, si on imagine un autre cas :
+
+#+BEGIN_SRC mips
+	  LW          $2, 0($3)
+	  SW          $2, 0($4)
+#+END_SRC
+
+Dans ce cas, on a effectivement produit le résultat de l'opération de la première instruction à la fin de l'étage MEM, et on en a besoin au début de l'étage MEM de la seconde instruction. On pourrait imaginer un bypass qui irait de MEM fin à MEM début, qui permettrait de ne pas avoir à introduire un cycle de gel.
+
+Mais, *PAS DE BYPASS ENTRANT EN MEM*, pour toutes les raisons données. On doit donc récupérer le résultat de l'opération LW (ici le contenu du registre $2) au début de l'étage EXE.
+
+On se servira donc du bypass déjà vu : MEM fin -> EXE début, ce qui implique un cycle de gel.
+
+Ce qui signifie qu'à un moment, les concepteurs du MIPS ont dû préférer introduire un cycle de gel plutôt que de payer un temps supplémentaire à l'étage MEM. En effet, MEM étant l'étage le plus gourmand en temps, ça aurait augmenté la durée du cycle pour toutes les instructions exécutées par ce processeur.
 
 
+** Optimisation de code
 
-Pas de bypass entrant en MEM !
+Prenons l'exemple d'un code C simple :
 
-Page 20 [refaire le schéma simplifié]
+#+BEGIN_SRC c
+  int a[size];
 
-[refaire l'optimisation]
+  for (i = 0; i != size; ++i) a[i] = 2*a[i];
+#+END_SRC
 
-Déroulage de boucle à bas niveau :
+En code ASM MIPS compilé, ça donne ça :
 
-Bien réécrire les dépendances.
+#+BEGIN_SRC mips
+	  OR          $0, $0, $0
+					  # i dans R8
+					  # size dans R6, a dans R5
+	  XOR         $8, $8, $8
+	  BEQ         $6, $0, suite
+	  SLL         $9, $6, 2           #multiplication par 4
+	  ADD         $9, $9, $5
 
-Réécrire le schéma simplifié.
+  loop:
+	  LW          $4, 0($5)
+	  SLL         $7, $4, 1           #multiplication par 2
+	  SW          $7, 0($5)
+	  ADDIU       $5, $5, 4
+	  BNE         $9, $5, loop
 
+  suite:
+#+END_SRC
 
-Problèmes de déroulage :
-- Empreinte mémoire dans la section de texte
-- Renommage des registres
-- Les défauts de cache
+Ce code tel quel ne respecte pas notre sémantique dans le MIPS 32, à cause du pipeline.
 
-Flot de contrôle.
+On doit déjà introduire des delayed slot derrière les branchements :
 
-Bloc de base.
+#+BEGIN_SRC mips
+	  OR          $0, $0, $0
+					  # i dans R8
+					  # size dans R6, a dans R5
+	  XOR         $8, $8, $8
+	  BEQ         $6, $0, suite        
+	  OR          $0, $0, $0          
+	  SLL         $9, $6, 2           #multiplication par 4
+	  ADD         $9, $9, $5
+
+  loop:
+	  LW          $4, 0($5)
+	  SLL         $7, $4, 1           #multiplication par 2
+	  SW          $7, 0($5)
+	  ADDIU       $5, $5, 4
+	  BNE         $9, $5, loop 
+	  OR          $0, $0, $0
+
+  suite:
+#+END_SRC
+
+On doit maintenant faire l'analyse de la performance de ce code assembleur. On se propose de faire le schéma simplifié, de manière à repérer les cycles de gel.
+
+|       |   1 | 2   | 3   | 4   | 5   | 6       | 7      | 8   | 9       | 10         | 11     | 12      | 13     | 14  | 15  | 16  | 17  |
+|-------+-----+-----+-----+-----+-----+---------+--------+-----+---------+------------+--------+---------+--------+-----+-----+-----+-----|
+| XOR   | IFC | DEC | EXE | MEM | WBK |         |        |     |         |            |        |         |        |     |     |     |     |
+| BEQ   |     | IFC | DEC | EXE | MEM | WBK     |        |     |         |            |        |         |        |     |     |     |     |
+| NOP   |     |     | IFC | DEC | EXE | MEM     | WBK    |     |         |            |        |         |        |     |     |     |     |
+| SLL   |     |     |     | IFC | DEC | EXE >-1 | MEM    | WBK |         |            |        |         |        |     |     |     |     |
+| ADD   |     |     |     |     | IFC | DEC     | -> EXE | MEM | WBK     |            |        |         |        |     |     |     |     |
+| LW    |     |     |     |     |     | IFC     | DEC    | EXE | MEM >-1 | WBK        |        |         |        |     |     |     |     |
+| SLL   |     |     |     |     |     |         | IFC    | DEC | GEL     | -> EXE >-1 | MEM    | WBK     |        |     |     |     |     |
+| SW    |     |     |     |     |     |         |        | IFC | GEL     | DEC        | -> EXE | MEM     | WBK    |     |     |     |     |
+| ADDIU |     |     |     |     |     |         |        |     | GEL     | IFC        | DEC    | EXE >-1 | MEM    | WBK |     |     |     |
+| BNE   |     |     |     |     |     |         |        |     |         |            | IFC    | GEL     | -> DEC | EXE | MEM | WBK |     |
+| NOP   |     |     |     |     |     |         |        |     |         |            |        |         | IFC    | DEC | EXE | MEM | WBK |
+
+Le CPI de cette suite d'instructions :
+
+#Cycles = 17 - 5 = 12
+#Instructions = 11
+#Instructions_utiles = 9
+
+CPI = 12/11
+CPIutile = 12/9
+
+2 cycles de gel. On peut sûrement faire mieux en changeant l'ordre des instructions (en veillant toutefois à ne pas changer la sémantique du programme).
+
+*** Le réordonnancement
+
+#+BEGIN_DEFINITION
+Le réordonnancement des instructions suit plusieurs objectifs :
+- Se débarrasser des cycles de gel
+- Se débarrasser des instructions NOP
+
+Et il doit respecter un certain nombre de contraintes :
+- Il doit respecter toutes les dépendances (*pas seulement celles qui introduisent des cycles de gel*)
+#+END_DEFINITION
+
+Dans notre exemple, à quoi cette optimisation pourrait-elle ressembler ?
+
+On décide de ne considérer que la boucle :
+
+#+BEGIN_SRC mips
+    loop:
+	    LW          $4, 0($5)
+	    SLL         $7, $4, 1           #multiplication par 2
+	    SW          $7, 0($5)
+	    ADDIU       $5, $5, 4
+	    BNE         $9, $5, loop 
+	    OR          $0, $0, $0
+#+END_SRC
+
+On rappelle :
+- Un cycle de gel entre le LW et le SLL
+- Un cycle de gel entre le ADDIU et le BNE
+- Un NOP après le BNE, inutile
+
+Le ADDIU incrémente $5 d'un pas constant : on peut faire remonter ADDIU avant SW sssi on corrige la modification qu'on fait sur $5 par l'offset de SW (-4 au lieu de 0).
+
+Le ADDIU peut donc être remonté à la deuxième position, ce qui fait d'une pierre deux coups :
+- On supprime le cycle de gel de SLL.
+- On supprime le cycle de gel de BNE.
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $4, 0($5)
+	  addiu       $5, $5, 4
+	  sll         $7, $4, 1           #multiplication par 2
+	  sw          $7, -4($5)
+	  bne         $9, $5, loop
+	  or          $0, $0, $0
+#+END_SRC
+
+On respecte bien toutes les dépendances.
+
+On peut maintenant mettre SW à la place du NOP, ce qui supprime l'instruction NOP :
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $4, 0($5)
+	  addiu       $5, $5, 4
+	  sll         $7, $4, 1           #multiplication par 2
+	  bne         $9, $5, loop
+	  sw          $7, -4($5)
+#+END_SRC
+
+On a bien 0 cycles de gel et 0 instructions NOP.
+
+Dans ce cycle de boucle en assembleur MIPS, on a deux instructions qui gèrent la boucle, et 3 instructions pour le corps. On a potentiellement moyen d'améliorer tout ça.
+
+*** Déroulage de boucle
+
+Mécaniquement, dérouler une boucle permet de diluer le coût de la gestion de la boucle (le coût en instructions assembleur d'une gestion de la boucle est constante), mais a aussi un autre avantage : le corps de la boucle devenant plus gros, on a plus d'opportunités de réordonnancement.
+
+**** Aparté : le déroulage, pourquoi ne pas en abuser ?
+
+Les problèmes liés au déroulage de boucle sont les suivants :
+
+- Le segment de texte des processus va exploser. Pas un problème en soi (la mémoire ne coûte plus rien), mais peut devenir un problème pour le cache d'instructions (le IFC ne coûteront plus 0, il faudra faire des accès mémoire plus souvent que jamais : pourvu qu'on ne soit pas un prolo en cache, dans les processeurs modernes pour les codes pas trop gros, on peut quand même partir du principe qu'une grosse partie voir tout le texte du programme tient dans le cache : les IFC coûtent donc 0. Si on déroule le code, c'est moins possible)
+- Le renommage des registres peut poser problème : si on regarde notre boucle déroulée, on a eu besoin de plus de registres différents. On n'a qu'un certain nombre de registres disponible.
+
+Mais dans les faits, les compilateurs abusent du déroulement de boucle, surtout quand la taille de la boucle est statique : ne permet pas d'économiser des accès mémoire en écriture, ni même de les bien grouper (on n'a qu'un nombre limité de registres), suppose une légère augmentation des défauts de cache instruction, mais permet de virtuellement supprimer le coût des gestions de boucle (qui est somme toute minime, rappelons-le)
+
+**** Retour à notre exemple
+
+Essayons de dérouler la boucle :
+
+à haut niveau :
+
+#+BEGIN_SRC c
+  for (i = 0; i + 1 < N; i+=2) {
+	  tab[i] = tab[i] * 2;
+	  tab[i+1] = tab[i+1] * 2;
+  }
+
+  for (; i < N; i++) {
+	  tab[i] = tab[i] * 2;
+  }
+#+END_SRC
+
+à bas niveau (en repartant de la boucle non encore optimisée) :
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $4, 0($5)
+	  sll         $7, $4, 1           #multiplication par 2
+	  sw          $7, 0($5)    
+	  lw          $14, 4($5)
+	  sll         $17, $14, 1
+	  sw          $17, 4($5)    
+
+	  addiu       $5, $5, 4
+	  bne         $9, $5, loop 
+	  or          $0, $0, $0
+#+END_SRC
+
+Dans notre cas, on a seulement 2 instructions de gestion de boucle (on ne compte pas le NOP qui sera supprimé dans la suite) pour 6 et non plus 3 instructions de corps.
+
+Dans cette version non encore optimisée, on a en revanche 3 cycles de gel et 1 instruction NOP.
+
+De la même manière qu'avant, on peut supprimer les cycles et le NOP en réordonnançant. Sauf que cette fois, on a plus d'ordonnancement possibles, puisque le corps de la boucle est plus grand.
+
+On doit prendre bien garde à respecter les dépendances :
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $4, 0($5)
+	  lw          $14, 4($5)
+	  sll         $7, $4, 1           #multiplication par 2
+	  sll         $17, $14, 1
+	  addiu       $5, $5, 8
+	  sw          $7, -8($5)    
+	  bne         $9, $5, loop 
+	  sw          $17, -4($5)  
+#+END_SRC
+
+On a bien 0 cycles de gel, et 0 instructions NOP.
+
+On a 6 instructions de corps et 2 instructions de gestion de boucle : meilleur rapport.
+
+Toutes ces techniques font bien mal à la tête ! On doit se donner un certain nombre d'outils théoriques qui permettront de formaliser correctement les possibilités d'optimisation, de manière à en évaluer leurs bénéfices et leur possibilité. (si on fait ça correctement, on pourra implémenter ces formalismes dans le compilateur, pour qu'il fasse les optimisations à notre place)
+
+*** Optimisation et flot de contrôle
+
+Si on prend un exemple un peu plus complexe :
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $8, 0($5)
+	  bgez        $8, endif
+	  nop
+	  sub         $9, $0, $8
+	  sw          $9, 0($5)
+  endif:
+	  addiu       $5, $5, 4
+	  bne         $7, $5, loop
+	  nop
+#+END_SRC
+
+Dans notre cas, on a un branchement dans la boucle à l'instruction bgez (cas fréquent, traduit un simple if).
+
+Quels problèmes pour l'ordonnancement et pour le déroulage de boucle ?
+
+Il faut un des outils théoriques qui permettent de systématiser les réponses à cette question.
+
+#+BEGIN_DEFINITION
+Un *bloc de base* est une séquence d'instruction comportant un seul point d'entrée (la première instruction) et un seul point de sortie (la dernière), et qui suit la règle suivante :
+Si la première instruction est exécutée, toutes les instructions du bloc de base le seront.
+#+END_DEFINITION
+
+#+BEGIN_THEOREM
+On détermine les blocs de base d'un code de la façon suivante :
+
+On détermine des en-têtes :
+
+- La première instruction d'une fonction ou d'un bout de code
+- L'instruction qui suit le dernier delayed slot après un saut
+- L'instruction cible d'un saut
+
+Une fois les en-tête placés, on peut définir les blocs de base de la manière suivante :
+Du début à la fin du code, un bloc de base court d'une en-tête à la suivante exclue.
+#+END_THEOREM
+
+#+BEGIN_DEFINITION
+Un graphe de contrôle de flot (CFG ou Control Flow Graph, dans la langue de 2Pac) est un graphe qui dessine les liens entre les blocs de base d'un programme. L'ensemble des liens constituent le contrôle de flot.
+
+On dit qu'il y a un *arc* de BB1 vers BB2 deux blocs de base sssi :
+- Soit il y a un saut de BB1 vers BB2
+- Soit BB2 suit BB1 dans l'ordre du programme sans que BB1 ne se termine par un saut inconditionnel
+#+END_DEFINITION
+
+Si on reprend notre exemple :
+
+#+BEGIN_SRC mips
+					  #BB1
+  loop:   
+	  lw          $8, 0($5)
+	  bgez        $8, endif
+	  nop
+					  #BB2
+	  sub         $9, $0, $8
+	  sw          $9, 0($5)
+					  #BB3
+  endif:  
+	  addiu       $5, $5, 4
+	  bne         $7, $5, loop
+	  nop
+#+END_SRC
+
+L'ordonnancement doit prendre bien garde au flot de contrôle : on ne peut pas forcément bouger une instruction d'un bloc de base à un autre.
+
+En revanche :
+
+#+BEGIN_THEOREM
+Si on a un seul bloc de base dans un code considéré, l'ordonnancement peut librement bouger n'importe laquelle instruction dans le bloc, pourvu que :
+- Le code résultant respecte bien les dépendances
+- Le code résultant soit bien toujours constitué d'un seul bloc de base
+#+END_THEOREM
+
+Dans le cas où on a plusieurs blocs de base, on doit faire plus attention aux arcs.
+
+| BB1 | >-1 |
+|-----+-----|
+| V   |     |
+|-----+-----|
+| BB2 |     |
+|-----+-----|
+| V   |     |
+|-----+-----|
+| BB3 | <-1 |
+
+Dans notre exemple :
+
+- BB1 et BB3 sont toujours exécutés : on peut bouger des instructions de BB1 vers BB3 et vice versa, pourvu qu'on respecte les dépendances.
+- BB2 n'est pas forcément exécuté : on ne peut pas mettre une instruction de BB1 dans BB2, ni remonter une instruction de BB3 de BB2
+- On peut bouger des instructions dans BB2 (suit de la définition du bloc de base), et on peut *éventuellement* descendre des instructions de BB2 vers BB3, si on ne change pas la sémantique d'une itération.
+
+Et comment fait-on quand on veut dérouler la boucle ?
+
+#+BEGIN_SRC mips
+					  #BB1
+  loop:   
+	  lw          $8, 0($5)
+	  bgez        $8, endif
+	  nop
+					  #BB2
+	  sub         $9, $0, $8
+	  sw          $9, 0($5)
+					  #BB1'
+	  lw          $18, 4($5)
+	  bgez        $18, endif
+	  nop
+					  #BB2'
+	  sub         $19, $0, $8
+	  sw          $9, 4($5)
+					  #BB3
+  endif:  
+	  addiu       $5, $5, 4
+	  bne         $7, $5, loop
+	  nop
+#+END_SRC
+
+On a bien réécrit les blocs de contrôle.
+
+On redessine le graphe :
+
+| BB1  | >-1,2    |
+|------+----------|
+| V    |          |
+|------+----------|
+| BB2  |          |
+|------+----------|
+| V    |          |
+|------+----------|
+| BB1' | <-2, >-3 |
+|------+----------|
+| V    |          |
+|------+----------|
+| BB2' |          |
+|------+----------|
+| V    |          |
+|------+----------|
+| BB3  | <-1,3    |
 
 On ne sépare pas un branchement interne de ses blocs successeurs.
+
+On doit aussi faire attention à une dernière chose :
+
+- Les instructions du corps de la boucle doivent être indépendantes les unes des autres, maintenant que leur indépendance n'est plus garantie par la boucle elle-même.
+- On doit faire particulièrement aux modifications en avance.
+
+En fait, le déroulage de boucle généralise la notion de "pipeline" : on traite des instructions de corps boucle à la pipeline : le traitement de la prochaine instruction de corps de boucle n'attend pas la prochaine itération de la boucle pour s'exécuter.
 
 
 * Annexes

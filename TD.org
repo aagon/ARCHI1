@@ -438,7 +438,7 @@ Pour cette raison, ils sont définis en moyenne.
 #+END_DEFINITION
 
 
-* Séance 3, 08/10/2019
+* Séance 3 : 08/10/2019
 
 ** TD 2
 
