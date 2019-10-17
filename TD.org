@@ -667,18 +667,18 @@ Quelle partie bien précise ? On suppose que le matériel sait faire le masque/f
 *** Exercice 8
 
 #+BEGIN_SRC mips
-	  ADDIU       $2,$0,4
-	  LUI         $3,0x00c
-	  ADD         $2,$2,$2
-	  ORI         $3,$3, 0x4568
-	  LW          $2,0($3)
-	  LBU         $2,0($2)
-	  ORI         $2,$2, 0x0001
-	  BLTZAL      $2,suite
-	  ADDU        $0,$0,$0
+	  addiu       $2,$0,4
+	  lui         $3,0x00c
+	  add         $2,$2,$2
+	  ori         $3,$3, 0x4568
+	  lw          $2,0($3)
+	  lbu         $2,0($2)
+	  ori         $2,$2, 0x0001
+	  bltzal      $2,suite
+	  addu        $0,$0,$0
   suite:
-	  JR          $31
-	  ADDU        $31,$31,-8
+	  jr          $31
+	  addu        $31,$31,-8
 #+END_SRC
 
 Dépendances :
@@ -715,10 +715,10 @@ Quel est le CPI de cette série d'instructions ?
 
 D'après Karine, on commence à compter à partir de la sortie de la première instruction considérée (on part du principe que ce qui était avant concernait d'autres instructions, ce qui est vrai) jusqu'à la sortie de la dernière instruction.
 
-#Cycles = 21 - 5 = 16
+#Cycles = 21 - 5 + 1 = 17
 #Instruction = 13
 
-CPI = 13/16
+CPI = 17/13
 
 *** Exercice 9
 
@@ -795,5 +795,366 @@ On a bien vu les 8 (4*2) bypass du pipeline MIPS.
 *** Exercice 10
 
 [pour s'entraîner]
+
+
+
+* Séance 4 : 15/10/2019
+
+** TD 2, suite
+
+*** Exercice 10
+
+Daniela dessine le schéma simplifié du code corrigé non optimisé.
+
+Le code corrigé non optimisé :
+
+#+BEGIN_SRC mips
+  loop:
+	  lb          $9,0($4)
+	  beq         $9,$0,end_loop
+	  nop
+	  addiu       $4,$4,1
+	  addiu       $2,$2,1
+	  j           end_loop
+	  nop         
+#+END_SRC
+
+Comment vraiment bien compter le nombre de cycles :
+
+| 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 |
+|---+---+---+---+---+---+---+---+---+----+----+----+----|
+| I | D | E | M | W |   |   |   |   |    |    |    |    |
+|   | I | O | O | D | E | M | W |   |    |    |    |    |
+|   |   |   |   | I | D | E | M | W |    |    |    |    |
+|   |   |   |   |   | I | D | E | M | W  |    |    |    |
+|   |   |   |   |   |   | I | D | E | M  | W  |    |    |
+|   |   |   |   |   |   |   | I | D | E  | M  | W  |    |
+|   |   |   |   |   |   |   |   | I | D  | E  | M  |  W |
+
+
+Soit je commence à 6, mais je dois aller jusqu'à 14 compris : 9
+Soit je commence à 5, mais je dois aller jusqu'à 13 compris : 9
+
+On a bien CPI = 9/7 et CPI_{utile} = 9/5
+
+Pareil avec les deux autres, à faire pour s'entraîner.
+
+*** Exercice 11
+
+#+BEGIN_SRC mips
+  loop:
+	  lb          $8,0($4)
+	  slt         $9,$8,$11
+	  slt         $10,$12,$8
+	  or          $10,$10,$9
+	  bne         $10,$0,endif
+	  nop
+	  addi        $8, $8, 'A' - 'a'
+	  sb          $8,0($4)
+  endif:
+	  addiu       $4,$4,1
+	  bne         $8,$0,loop
+	  nop
+#+END_SRC
+
+Trouver les dépendances :
+
+RAW de 3 à 2
+RAW de 5 à 4
+RAW de 6 à 5
+RAW de 9 à 8
+
+En fait, il s'agissait de trouver les dépendances, et pas seulement les dépendances qui introduisent des aléas dans le pipeline :
+
+Donc :
+
+RAW de 3 à 2
+RAW de 5 à 4
+RAW de 6 à 5
+RAW de 9 à 8
+
+Mais aussi
+
+RAW de 4 à 2 (sur $8)
+RAW de 5 à 3 (sur $9)
+
+RAW de 12 à 8 (sur $8)
+RAW de 2 à 11 (sur $4, si on part du principe que la boucle reprend)
+
+On doit, lors de l'écriture des schémas simplifiés, traiter les différents résultats des flots de contrôle.
+
+Dans notre cas, les instructions 8 et 9 sont exécutées ou non : on fera donc un schéma simplifié dans le cas où elles le sont et où elles ne le sont pas.
+
+
+Elles le sont :
+
+| 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 |
+|---+---+---+---+---+---+---+---+---+----+----+----+----+----+----+----+----|
+| I | D | E | M | W |   |   |   |   |    |    |    |    |    |    |    |    |
+|   | I | D | O | E | M | W |   |   |    |    |    |    |    |    |    |    |
+|   |   | I | O | D | E | M | W |   |    |    |    |    |    |    |    |    |
+|   |   |   | O | I | D | E | M | W |    |    |    |    |    |    |    |    |
+|   |   |   |   |   | I | O | D | E | M  | W  |    |    |    |    |    |    |
+|   |   |   |   |   |   | O | I | D | E  | M  | W  |    |    |    |    |    |
+|   |   |   |   |   |   |   |   | I | D  | E  | M  | W  |    |    |    |    |
+|   |   |   |   |   |   |   |   |   | I  | D  | E  | M  | W  |    |    |    |
+|   |   |   |   |   |   |   |   |   |    | I  | D  | E  | M  | W  |    |    |
+|   |   |   |   |   |   |   |   |   |    |    | I  | D  | E  | M  | W  |    |
+|   |   |   |   |   |   |   |   |   |    |    |    | I  | D  | E  | M  |  W |
+
+17 - 5 + 1 = 13 (c'est bien ça, mais on n'a pas noté les bypass.)
+
+[à reprendre à la maison]
+
+Elles ne le sont pas :
+
+| 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 |
+|---+---+---+---+---+---+---+---+---+----+----+----+----+----+----|
+| I | D | E | M | W |   |   |   |   |    |    |    |    |    |    |
+|   | I | D | O | E | M | W |   |   |    |    |    |    |    |    |
+|   |   | I | O | D | E | M | W |   |    |    |    |    |    |    |
+|   |   |   | O | I | D | E | M | W |    |    |    |    |    |    |
+|   |   |   |   |   | I | O | D | E | M  | W  |    |    |    |    |
+|   |   |   |   |   |   | O | I | D | E  | M  | W  |    |    |    |
+|   |   |   |   |   |   |   |   | I | D  | E  | M  | W  |    |    |
+|   |   |   |   |   |   |   |   |   | I  | D  | E  | M  | W  |    |
+|   |   |   |   |   |   |   |   |   |    | I  | D  | E  | M  | W  |
+
+15 - 5 + 1 = 11 (c'est bien ça, on doit rajouter les bypass)
+
+[à reprendre à la maison]
+
+CPI moyen (#cycles moyen / #instructions_moyen)
+
+(13 * 30% + 11 * 70%) / (11 * 30% + 9 * 70%)
+
+[on fera le calcul si ça nous amuse]
+
+*** Exercice 12
+
+Transformation du code :
+
+#+BEGIN_SRC mips
+  _pgcd_loop:
+	  sltu        $8,$4,$5
+	  beq         $8,$0, _pgcd_else
+	  nop
+	  sub         $5,$5,$4
+	  j           _pgcd_endif
+	  nop
+  _pgcd_else:
+	  sub         $4,$4,$5
+  _pgcd_endif:
+	  bne         $4,$5, _pgcd_loop
+	  nop
+#+END_SRC
+
+Les dépendances :
+
+RAW de 3 à 2 (pour $8)
+RAW de 11 à 9 (pour $4)
+RAW de 11 à 5 (pour $5)
+
+RAW de 2 à 9 (pour $4) (mais conditionnel)
+
+Le schéma simplifié :
+
+[fait au tableau, à refaire pour s'entraîner]
+
+Le calcul du CPI et du CPI utile
+
+
+[fait au tableau, à refaire pour s'entraîner]
+
+** TD3 : optimisation de code, pipeline, superpipeline
+
+*** Exercice 1
+
+On ne peut pas vraiment optimiser ce code assembleur :
+
+[remettre le code assembleur]
+
+*** Exercice 2
+
+#+BEGIN_SRC mips
+  loop:
+	  lbu         $8,0($4)
+	  addu        $8,$8,$5
+	  lbu         $9,0($8)
+	  sb          $9,0($4)
+	  addiu       $4,$4,1
+	  bne         $4,$10,loop
+#+END_SRC
+
+Trouver les dépendances :
+
+RAW de 3 à 2
+RAW de 4 à 3
+RAW de 5 à 4
+RAW de 7 à 6
+
+RAW de 2 à 6 (over the loop)
+
+Schéma simplifié
+
+| 1 | 2 | 3 | 4     | 5        | 6    | 7     | 8 | 9     | 10   | 11 | 12 | 13 | 14 |
+|---+---+---+-------+----------+------+-------+---+-------+------+----+----+----+----|
+| I | D | E | M >-1 | W        |      |       |   |       |      |    |    |    |    |
+|   | I | D | O     | -> E >-1 | M    | W     |   |       |      |    |    |    |    |
+|   |   | I | O     | D        | -> E | M >-1 | W |       |      |    |    |    |    |
+|   |   |   | O     | I        | D    | O     | E | M     | W    |    |    |    |    |
+|   |   |   |       |          | I    | O     | D | E >-1 | M    | W  |    |    |    |
+|   |   |   |       |          |      |       | I | O     | -> D | E  | M  | W  |    |
+|   |   |   |       |          |      |       |   |       | I    | D  | E  | M  |  W |
+
+Calculer le CPI
+ 
+Optimisation :
+
+#+BEGIN_SRC mips
+  loop:
+	  lbu         $8,0($4)
+	  addiu       $4,$4,1
+	  addu        $8,$8,$5
+	  lbu         $9,0($8)
+	  bne         $4,$10,loop
+	  sb          $9,-1($4)        
+#+END_SRC
+
+Le store byte (les instructions store en général) sont les candidats prioritaires à l'inclusion dans le delayed slot.
+
+CPI égale CPI_utile égale 1.
+
+La démarche en général est assez peu systématisée : en gros on dessine les flots de dépendance entre les instructions, et on essaie de panacher pour éloigner les instructions qui crééent des aléas.
+
+*** Exercice 3
+
+On considère un pipeline un peu modifié.
+
+**** a : Schéma détaillé
+
+[à refaire]
+
+**** b : Pourquoi pas de bypass devant MEM1
+
+On part du principe que MEM1 est bien l'étage le plus long. Mettre un bypass devant MEM1 augmente l'étage déjà le plus long, donc augmente la durée du cycle.
+
+**** c : Faire en sorte que la programme précédent tourne dans notre processeur
+
+#+BEGIN_SRC mips
+  loop:
+	  lbu         $8,0($4)
+	  addu        $8,$8,$5
+	  lbu         $9,0($8)
+	  sb          $9,0($4)
+	  addiu       $4,$4,1
+	  bne         $4,$10,loop
+	  nop
+	  nop
+#+END_SRC
+
+**** d : schéma simplifié
+
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+
+[Fait au tableau, à refaire]
+
+13 cycles pour une itération
+
+1024 * 13 * 2 ns = 26624 ns
+
+**** e : même question pour un autre processeur
+
+Le processeur a un bypass en plus de MEM2 fin à MEM1 début, au prix d'un cycle un peu plus long (2,1 ms au lieu de 2 ms)
+
+On va probablement montrer que le bypass ne vaut pas le coup.
+
+[refaire le schéma simplifié]
+
+12 cycles pour une itération
+
+1024 * 12 * 2,1 = 25804 ns
+
+(Ca ne vaut quand même pas le coup)
+
+**** f : réordonnancement
+
+La seule bonne manière :
+- On met le sb dans le dernier nop
+- On panache entre les flux de dépendance
+
+#+BEGIN_SRC mips
+  loop:
+	  lbu         $8,0($4)
+	  addiu       $4,$4,1
+	  addu        $8,$8,$5
+	  lbu         $9,0($8)
+	  bne         $4,$10,loop
+	  nop
+	  sb          $9,0($4)
+#+END_SRC
+
+Refaire le schéma simplifié :
+
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+|   |   |   |   |   |   |   |   |   |   |   |   |   |   |   |
+
+**** g
+
+Pareil pour PROC2, même ordonnancement
+
+**** h
+
+On déroule la boucle :
+
+#+BEGIN_SRC mips
+  loop:
+	  lbu         $8,0($4)
+	  lbu         $12,1($4)
+	  addu        $8,$8,$5
+	  addu        $12,$12,$5
+	  lbu         $9,0($8)
+	  lbu         $13,0($12)
+	  sb          $9,0($4)
+	  sb          $13,1($4)
+	  addiu       $4,$4,2
+	  bne         $4,$10,loop
+	  nop
+	  nop
+#+END_SRC
+
+Optimisation :
+
+#+BEGIN_SRC mips
+  loop:
+	  lbu         $8,0($4)
+	  lbu         $12,1($4)
+	  addiu       $4,$4,2
+	  addu        $8,$8,$5
+	  addu        $12,$12,$5
+	  lbu         $9,0($8)
+	  lbu         $13,0($12)
+	  bne         $4,$10,loop
+	  sb          $9,-2($4)
+	  sb          $13,-1($4)
+#+END_SRC
+
+Sans avoir besoin de faire le schéma simplifié, on a un CPI de 1.
 
 

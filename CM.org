@@ -1054,6 +1054,7 @@ Pipeline
 
 Idéalement, on aurait une instruction terminée à chaque cycle, soit un CPI de 1.
 
+
 ** Dépendances
 
 #+BEGIN_DEFINITION
@@ -1584,6 +1585,94 @@ On doit aussi faire attention à une dernière chose :
 - On doit faire particulièrement aux modifications en avance.
 
 En fait, le déroulage de boucle généralise la notion de "pipeline" : on traite des instructions de corps boucle à la pipeline : le traitement de la prochaine instruction de corps de boucle n'attend pas la prochaine itération de la boucle pour s'exécuter.
+
+
+* Cours 5 : 17/10/2019
+
+Rappel examen :
+
+Portera jusqu'au cours 4 compris.
+
+#+BEGIN_DEFINITION
+La performance en temps d'exécution est donnée par la fréquence divisée par le CPI.
+#+END_DEFINITION
+
+Augmenter la performance, c'est d'abord faire tendre le CPI vers 1.
+
+On peut augmenter le fréquence, donc la performance en multipliant les étages de pipeline.
+
+Invention du superpipeline.
+
+
+Mais plus le pipeline est profond, plus on augmente le problème des dépendances de données.
+
+#+BEGIN_THEOREM
+Caractérisation de l'aléa de pipeline :
+
+Si le cycle DEC est avant l'écriture dans le banc de registre, on a potentiellement un problème de dépendances de données?
+Au contraire, si le cycle DEC est après l'écriture, on sait qu'on n'a pas de problème.
+#+END_THEOREM
+
+Un cycle de gel augmente le nombre de cycle de 1, fait donc augmenter le CPI.
+Plus de bypass font augmenter la durée du cycle, donc baisser la fréquence.
+
+Autre problème, on augmente la quantité de delayed slots (CPI/CPI utile augmente) : si on dit que le décodage de l'adresse suivante se fait à la fin de l'étage N, on a N-1 delayed slots.
+
+Une solution consiste à se débarasser des branchements : on n'a plus le droit d'écrire de if ou de while. il y eu une machine qui faisait ça (CRAY).
+
+*** Les processeurs SuperScalaire
+
+Comment ?
+
+Il faut exécuter plusieurs instructions par cycle. Ces processeurs superscalaires ont commencé à dominer à partir des années 90.
+
+Les opérateurs ont un temps de calcul logarithmique (addition, shift, or, etc...).
+Certaines opérations (comme la multiplication) ne sont pas logarithmiques.
+
+On arrive maintenant à faire une multiplication en 3 additions, contre 31 dans la manière naïve.
+
+On peut donc caser la multiplication à la places des 3 derniers étages du pipeline, en parallèle.
+
+On pourrait faire travailler les deux pipeline en même temps, mais on s'en sert pour le moment de manière séquentielle.
+
+
+
+Mais alors pourquoi ne pas doubler le pipeline d'exécution (E, M et W) pour en faire deux pipelines indépendants.
+
+Le cycle decode doit donc décoder deux instructions à la fois.
+
+Le cycle ifc doit donc alimenter le cycle décode.
+La mémoire doit donc être capable de donner non pas 1, mais 2 instructions à la fois.
+
+16 bypass par opérande, donc 32 en tout.
+
+Le nombre de bypass est donné par : (2 * 2) ^ nombre de pipeline , par opérande.
+
+Opération nop* fait pendant à l'instruction nop.
+
+[reprendre le schéma après avoir trouvé un formalisme]
+
+L'exécution se fait ici dans l'ordre : on bloque les deux pipeline.
+
+Problème de l'alignement des adresses [réexpliquer] : au lieu de rejeter l'instruction qu'on ne peut pas exécuter de suite, on le met dans un tampon d'instruction (un fifo, qui doit avoir deux fois plus de place que le nombre de pipelines).
+
+On peut toujours alimenter le buffer N par N, et on peut toujours prendre N instructions (Toutes les instruction fetch sont alignés, et on fait moins d'accès mémoire)
+
+Doit particulièrement bien marcher avec le déroulage de boucle.
+
+Par contre, les conditions d'optimisation sont beaucoup plus strictes.
+
+[reprendre le calcul des cycles]
+
+Il faut N accès à la mémoire des données.
+
+Quand on met un cycle de gel dans un des N pipeline séparés (en E, M ou W), on perd 1/N
+
+[refaire le superscalaire avec la boucle déroulée]
+
+On peut compter le nombre de cycles en comptant la période à laquelle le tampon se vide à nouveau.
+
+Au mieux, on peut exécuter n instructions en (n/N)+1 cycles, avec N le nombre de pipelines.
 
 
 * Annexes
