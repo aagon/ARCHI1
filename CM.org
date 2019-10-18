@@ -38,6 +38,8 @@ Support de cours apparemment compilé par les étudiants de ALIAS.
 Hennessey-Patterson, _Computer architecture_
 Il faut faire les annales, la structure des examens est très classique.
 
+Le partiel portera sur les cours jusqu'au 4 compris.
+
 
 * Cours 0 : 18/09/2019
 
@@ -1589,60 +1591,105 @@ En fait, le déroulage de boucle généralise la notion de "pipeline" : on trait
 
 * Cours 5 : 17/10/2019
 
-Rappel examen :
+*** Rappels des épisodes précédents
 
-Portera jusqu'au cours 4 compris.
+Quelques rappels avant de voir la prochaine grande innovation des processeurs.
 
 #+BEGIN_DEFINITION
 La performance en temps d'exécution est donnée par la fréquence divisée par le CPI.
 #+END_DEFINITION
 
-Augmenter la performance, c'est d'abord faire tendre le CPI vers 1.
+#+BEGIN_THEOREM
+On peut caractériser la dépendance de données de la manière suivante :
+
+Si le cycle DEC d'un pipeline est situé avant l'écriture dans le banc de registre des registres qu'il doit lire, alors on a potentiellement un problème de dépendances de données.
+
+Au contraire, si le cycle DEC est après cette écriture, on sait qu'on n'aura pas de problème de dépendances.
+
+Si on a un pipeline à N étages, alors on peut avoir des problèmes de dépendances de l'instruction i à l'instruction i + n - 2 (on part du principe que DEC est le deuxième étage du pipeline). En particulier, dans notre cas d'un pipeline à 5 étages, on pourra avoir des problèmes de dépendances de données de i à i+3 au maximum.
+#+END_THEOREM
+
+#+BEGIN_THEOREM
+Un cycle de gel augmente le nombre de cycles nécessaires à l'exécution d'un ensemble d'instructions de 1.
+#+END_THEOREM
+
+On a fondamentalement deux manières d'augmenter la performance, c'est d'augmenter la fréquence ou de diminuer le CPI.
+
+L'idée du pipeline suit de la volonté d'augmenter la fréquence des processeurs. Les adaptations qu'on a vu en terme de bypass sont là pour préserver un CPI proche de 1.
 
 On peut augmenter le fréquence, donc la performance en multipliant les étages de pipeline.
 
-Invention du superpipeline.
+C'est l'invention du superpipeline.
 
+*** Superpipeline
 
-Mais plus le pipeline est profond, plus on augmente le problème des dépendances de données.
+Mais comme on l'a vu avec le résultat plus haut, plus le pipeline est profond, plus on augmente le problème de la dépendance des données (celui-ci augmente linéairement en N le nombre d'étages du pipeline).
 
-#+BEGIN_THEOREM
-Caractérisation de l'aléa de pipeline :
+Augmenter le nombre de bypass n'est pas une solution miracle, car les bypass supposent un multiplexeur pour l'étage qui a le bypass en entrée, ce qui va avoir tendance à augmenter la durée du cycle, donc baisser la fréquence.
 
-Si le cycle DEC est avant l'écriture dans le banc de registre, on a potentiellement un problème de dépendances de données?
-Au contraire, si le cycle DEC est après l'écriture, on sait qu'on n'a pas de problème.
-#+END_THEOREM
+Autre problème, on augmente la quantité de delayed slots (CPI/CPI utile augmente) : si on dit que le décodage de l'adresse suivante se fait à la fin de l'étage N, on a N-1 delayed slots. (Déjà moins grave : on peut quand même partir du principe que l'étage DEC restera quoi qu'il en soit très près du début).
 
-Un cycle de gel augmente le nombre de cycle de 1, fait donc augmenter le CPI.
-Plus de bypass font augmenter la durée du cycle, donc baisser la fréquence.
+Si on interdit à l'utilisateur, donc au compilateur, de produire des branchements (pas de if ni de while autorisé), alors on peut se permettre de créer des processeurs avec beaucoup beaucoup d'étages de pipeline, qui seront efficaces pour le traitement des données peu dépendantes les unes des autres (typiquement, le calcul matriciel).
 
-Autre problème, on augmente la quantité de delayed slots (CPI/CPI utile augmente) : si on dit que le décodage de l'adresse suivante se fait à la fin de l'étage N, on a N-1 delayed slots.
-
-Une solution consiste à se débarasser des branchements : on n'a plus le droit d'écrire de if ou de while. il y eu une machine qui faisait ça (CRAY).
+Le supercalculateur CRAY-2, de la fin des années 80 (1985).
 
 *** Les processeurs SuperScalaire
 
-Comment ?
+On voit que les manières d'augmenter la fréquence en augmentant le nombre d'étages de pipeline posent presque autant de problème qu'elles en résolvent, et que les problèmes posés par cette solution n'augmentent pas de manière linéaire : à titre d'exemple, si un compilateur est assez capable de trouver une instruction à caser dans le delayed slot unique (75% du temps), ça devient beaucoup plus difficile avec 2 delayed slots (5%) et encore davantage avec 3 (0%).
 
-Il faut exécuter plusieurs instructions par cycle. Ces processeurs superscalaires ont commencé à dominer à partir des années 90.
+Comment régler le problème donc ? Si on veut pouvoir continuer à augmenter la performance, mais que l'augmentation artificielle de la fréquence par le pipeline n'est pas assez rentable, il faut diminuer le CPI en dessous de ce qui était jusque là sa limite théorique : 1.
 
-Les opérateurs ont un temps de calcul logarithmique (addition, shift, or, etc...).
-Certaines opérations (comme la multiplication) ne sont pas logarithmiques.
+Autrement dit, il faut exécuter plusieurs instructions par cycle : invention des processus superscalaires, qui ont commencé à dominer dans les années 90. Les processeurs utilisés dans les machines modernes sont des processus superscalaires un peu particuliers (on le verra plus tard).
 
-On arrive maintenant à faire une multiplication en 3 additions, contre 31 dans la manière naïve.
+**** Aparté : les pipeline parallèles
 
-On peut donc caser la multiplication à la places des 3 derniers étages du pipeline, en parallèle.
+L'idée d'avoir plusieurs pipeline n'est pas spécifique aux processeurs superscalaires. On sait que certaines opérations sont plus longues que d'autres : certains opérateurs comme l'addition, le shift, la comparaison bit à bit ont un temps de calcul algorithmique en le nombre de bits sur lequel ils sont appliqués, et certains autres (comme la multiplication) ne le sont pas du tout.
 
-On pourrait faire travailler les deux pipeline en même temps, mais on s'en sert pour le moment de manière séquentielle.
+La manière naïve de faire une multiplication de deux nombres écrits sur 32 bits chacun est la manière de multiplier qu'on a appris à l'école : on fait les multiplications chiffre par chiffre (ici, bit à bit), puis on additionne le résultat des multiplications. On a au maximum 31 additions.
 
+Un certain nombre d'algorithmes plus intelligents arrivent à faire ces multiplications en 3 additions plutôt qu'en 31. La multiplication reste quand même trois fois plus longue qu'une opération faite par l'unité logique et arithmétique.
 
+On peut donc caser la multiplication à la places des 3 derniers étages du pipeline, en parallèle de ceux-ci.
 
-Mais alors pourquoi ne pas doubler le pipeline d'exécution (E, M et W) pour en faire deux pipelines indépendants.
+**** Retour aux processus superscalaires
 
-Le cycle decode doit donc décoder deux instructions à la fois.
+De la même manière que pour traiter la multiplication, on pourrait parfaitement doubler le pipeline d'exécution (E, M et W) pour en faire deux pipelines indépendants ?
 
-Le cycle ifc doit donc alimenter le cycle décode.
+Le cycle D devra donc décoder deux instructions à la fois.
+
+Le cycle I doit maintenant alimenter le cycle decode avec deux instructions
+
 La mémoire doit donc être capable de donner non pas 1, mais 2 instructions à la fois.
+
+Ce qui suppose plusieurs choses :
+- La largeur du bus CPU-mémoire centrale doit être doublée.
+- Si on ne tient pas à mettre deux accès mémoire indépendants (ce qui coûte très cher), alors on doit demander au processeur de fetch deux mots d'instruction contigus d'un coup (les deux instructions pourront passer par le bus, mais ce sera toujours un seul bus, avec un seul contrôleur mémoire). Or, les mots d'instruction doivent être alignés (Adresses en octets divisibles par la taille du mot mémoire). L'adresse des couples d'instruction qu'on va demander à chercher devra donc être divisible par le double de la taille du mot mémoire. Si on veut que cette condition soit toujours respectée, on doit forcément :
+-- Chercher toujours 2 mots d'instruction d'un coup
+-- Ne jamais aller rechercher un mot d'instruction qu'on a déjà cherché avant (parmi les N qu'on va chercher) (donc ne jamais discard un mot d'instruction, à moins d'être sûr de ne point avoir envie de l'exécuter)
+
+#+BEGIN_THEOREM
+Problème généralisable à N : si on met N pipelines, le N-uplet d'instructions qu'on va chercher doit être divisible par N fois la taille du mot mémoire.
+
+Si on veut que cette condition soit toujours respectée, on doit :
+- Chercher toujours N mots d'instructions d'un coup
+- Ne jamais aller rechercher un mot d'instruction qu'on a déjà cherché avant (parmi les N qu'on va chercher) (donc ne jamais discard un mot d'instruction, à moins d'être dûr de n'avoir point envie de l'exécuter)
+#+END_THEOREM
+
+Or, si les deux instructions passées chacune dans un des deux pipeline parallèle, il est parfaitement possible de ne pas pouvoir en exécuter une des deux (problème de dépendance). Or, d'après ce qu'on vient d'établir, on ne peut pas juste discard une instruction simplement parce qu'on ne peut pas l'exécuter : il faut être sûr de ne pas avoir envie du tout de l'exécuter, en raison par exemple d'un branchement conditionné ou non. Si on ne peut pas discard, il faut garder cette instruction non exécutée qqpart.
+
+Cet endroit, c'est le *tampon d'instructions* (instruction buffer).
+
+En fait, quand le matériel de l'étage IFC cherche deux mots d'instruction dans la mémoire, il place des deux mots d'instruction dans le tampon d'instruction, tampon dans lequel le matériel de l'étage DEC vient puiser une ou deux instructions (selon s'il peut en exécuter une ou deux).
+
+#+BEGIN_THEOREM
+Si on admet que le tampon ne peut être rempli que deux instructions par deux, et qu'on ne peut prélever que une ou deux instruction à la fois, quelle taille minimale du tampon garantit que l'étage DEC a toujours au moins deux instructions à prendre ?
+4.
+
+Résultat généralisable à N. Si on admet que le tampon ne peut être rempli que N instructions par N, et qu'on ne peut prélever que N, N-1, ..., 1 instruction à la fois, quelle taille minimale du tampon garantit que l'étage DEC a au moins N instructions à prendre ?
+2N.
+#+END_THEOREM
+
+C'est la raison pour laquelle le tampon d'instruction peut tenir 4 instructions dans un processeur superscalaire à deux pipelines.
 
 16 bypass par opérande, donc 32 en tout.
 
