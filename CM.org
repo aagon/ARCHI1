@@ -1653,13 +1653,17 @@ On peut donc caser la multiplication à la places des 3 derniers étages du pipe
 
 **** Retour aux processus superscalaires
 
-De la même manière que pour traiter la multiplication, on pourrait parfaitement doubler le pipeline d'exécution (E, M et W) pour en faire deux pipelines indépendants ?
+De la même manière que pour traiter la multiplication, on pourrait parfaitement doubler le pipeline d'exécution (E, M et W) pour en faire deux pipelines indépendants.
+
+***** Conséquence sur l'accès mémoire et introduction du tampon d'instruction
 
 Le cycle D devra donc décoder deux instructions à la fois.
 
 Le cycle I doit maintenant alimenter le cycle decode avec deux instructions
 
 La mémoire doit donc être capable de donner non pas 1, mais 2 instructions à la fois.
+
+On rappelle que les instructions doivent être alignées, autrement dit que leurs adresses en octets doivent être divisibles par la taille en octets du mot d'instruction mémoire.
 
 Ce qui suppose plusieurs choses :
 - La largeur du bus CPU-mémoire centrale doit être doublée.
@@ -1691,35 +1695,184 @@ Résultat généralisable à N. Si on admet que le tampon ne peut être rempli q
 
 C'est la raison pour laquelle le tampon d'instruction peut tenir 4 instructions dans un processeur superscalaire à deux pipelines.
 
-16 bypass par opérande, donc 32 en tout.
+***** Conséquence sur les bypass
 
-Le nombre de bypass est donné par : (2 * 2) ^ nombre de pipeline , par opérande.
+Rappels sur les bypass existant :
+- E fin vers E début
+- M fin vers E début
+- E fin vers D début
+- M fin vers D début
 
-Opération nop* fait pendant à l'instruction nop.
+Donc 4 bypass par opérande sur un pipeline simple.
 
-[reprendre le schéma après avoir trouvé un formalisme]
+Si on imagine un superscalaire à deux pipelines, on doit potentiellement avoir deux 4^2 pipelines :
+- Les 4 bypass de pipeline 1 vers pipeline 1
+- Les 4 bypass de pipeline 1 vers pipeline 2
+- Les 4 bypass de pipeline 2 vers pipeline 2
+- Les 4 bypass de pipeline 2 vers pipeline 1
 
-L'exécution se fait ici dans l'ordre : on bloque les deux pipeline.
+#+BEGIN_THEOREM
+Si on admet le schéma de bypass classique du MIPS, alors le nombre de bypass nécessaire par opérande est donné par 4^N, N étant le nombre de pipelines du processeur superscalaire.
+#+END_THEOREM
 
-Problème de l'alignement des adresses [réexpliquer] : au lieu de rejeter l'instruction qu'on ne peut pas exécuter de suite, on le met dans un tampon d'instruction (un fifo, qui doit avoir deux fois plus de place que le nombre de pipelines).
+Dans le cas d'un processus superscalaire à deux pipelines, on a donc 16 bypass par opérande, donc 32 en tout.
 
-On peut toujours alimenter le buffer N par N, et on peut toujours prendre N instructions (Toutes les instruction fetch sont alignés, et on fait moins d'accès mémoire)
+**** Exemple
 
-Doit particulièrement bien marcher avec le déroulage de boucle.
+Prenons un exemple au tableau, reproduit ici :
 
-Par contre, les conditions d'optimisation sont beaucoup plus strictes.
+#+BEGIN_SRC mips
+  for:
+	  lw          $6,0($4)
+	  sll         $6,$6,1
+	  sw          $6,0($4)
+	  addiu       $4,$4,4
 
-[reprendre le calcul des cycles]
+	  bne         $4,$9,for
+	  nop
+#+END_SRC
 
-Il faut N accès à la mémoire des données.
+Faisons passer cette suite d'instructions dans un superscalaire à 2 pipelines, en faisant apparaître le contenu du tampon d'instructions.
 
-Quand on met un cycle de gel dans un des N pipeline séparés (en E, M ou W), on perd 1/N
+| IB@endI  | Inst  | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 |   |   |
+|----------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|          | lw    |   |   | E | M | W |   |   |   |   |    |    |   |   |
+| lw,sll   |       | I | D |   |   |   |   |   |   |   |    |    |   |   |
+|          | nop*  |   |   | E | M | W |   |   |   |   |    |    |   |   |
+|----------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|          | sll   |   |   |   | 0 | E | M | W |   |   |    |    |   |   |
+| sll,sw   |       |   | I | D |   |   |   |   |   |   |    |    |   |   |
+| addiu    | nop*  |   |   |   | 0 | E | M | W |   |   |    |    |   |   |
+|----------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|          | sw    |   |   |   |   |   | E | M | W |   |    |    |   |   |
+| sw,addiu |       |   |   | I | 0 | D |   |   |   |   |    |    |   |   |
+| bne,nop  | addiu |   |   |   |   |   | E | M | W |   |    |    |   |   |
+|----------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|          | bne   |   |   |   |   |   |   |   | E | M | W  |    |   |   |
+| bne,nop  |       |   |   |   | 0 | I | 0 | D |   |   |    |    |   |   |
+| x,y      | nop   |   |   |   |   |   |   |   | E | M | W  |    |   |   |
+|----------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|          | nop*  |   |   |   |   |   |   |   |   | E | M  | W  |   |   |
+| x,y      |       |   |   |   |   |   |   | I | D |   |    |    |   |   |
+| x1,y1    | nop*  |   |   |   |   |   |   |   |   | E | M  | W  |   |   |
+|----------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|          |       |   |   |   |   |   |   |   |   |   |    |    |   |   |
+| lw,sll   |       |   |   |   |   |   |   |   | I |   |    |    |   |   |
+|          |       |   |   |   |   |   |   |   |   |   |    |    |   |   |
 
-[refaire le superscalaire avec la boucle déroulée]
 
-On peut compter le nombre de cycles en comptant la période à laquelle le tampon se vide à nouveau.
+Le calcul du CPI et du CPI utile :
 
-Au mieux, on peut exécuter n instructions en (n/N)+1 cycles, avec N le nombre de pipelines.
+#+BEGIN_THEOREM
+La bonne manière de calculer le nombre de cycles, donnée par Pirouz, est la suivante :
+
+On note le numéro du cycle pendant lequel on fait rentrer la prochaine instruction effective qui n'est pas dans le segment étudié dans le pipeline. On note le numéro du cycle pendant lequel on fait rentrer la première instruction de notre segment. On fait la différence entre le premier et le second.
+
+Cette méthode s'applique aussi bien aux itérations de boucle qu'aux suites séquentielles d'instructions : elle est en fait un peu plus robuste que la méthode de Karine, qui consistait à compter à partir de la sortie de la première instruction du segment jusqu'à la sortie de la dernière.
+
+On peut aussi, dans le cas d'une boucle, compter le nombre de cycles en comptant la période à laquelle le tampon se vide à nouveau (si on part du principe que le tampon d'instruction est vide au début de notre exécution).
+#+END_THEOREM
+
+Dans notre exemple, la première instruction effective qui ne fait pas partie de notre segment étudié (une itération particulière de la boucle) rentre dans le pipeline au cycle 8. La première instruction de notre segment rentre dans le pipeline au cycle 1. On a donc bien 7 cycles.
+
+On compte 6 instructions (attention, les nop* ne sont pas des instructions, mais des opérations, et ne comptent donc pas dans ce total), dont 5 utiles. Le CPI est donc de 7/6 et le CPI utile de 7/5. Ce n'est pas beaucoup mieux qu'un processeur pipeliné classique : ce processeur est particulièrement sensible aux branchements, comme on va le voir.
+
+**** Opération nop*, flush du tampon d'instruction et efficacité
+
+#+BEGIN_DEFINITION
+On nomme *opération* l'instruction réduite à ses trois derniers étages. A titre d'exemple, on a défini nop*, qui est l'équivalent de l'instruction nop, qu'on met dans un des deux pipeline parallèles (de fait, dans le dernier des deux).
+#+END_DEFINITION
+
+Les opérations à mettre dans les différents pipelines ne sont en fait connues qu'à la fin de l'étage decode. Le matériel de l'étage decode regarde les deux premières instructions du tampon d'instruction, décide s'il peut mettre les deux dans le pipeline. S'il ne peut pas, il ne met que la première, et il met une opération nop* dans le deuxième pipeline parallèle.
+
+Dans le cas spécifique d'un branchement, les 4 instructions du tampon d'instructions ne sont potentiellement plus les bonnes (décidé à la fin de l'étage decode de l'instruction de branchement). Il faut flush le tampon d'instructions. Or on sait que le tampon d'instructions doit être flush quand celui-ci est déjà plein de 4 instructions qu'on ne veut pas exécuter. C'est donc à l'instruction d'après seulement que des instructions à exécuter rentrent effectivement dans le tampon d'instruction.
+
+On a donc, après un branchement réussi (si le branchement échoue, les instructions séquentielles sont valables), toujours une instruction inutile.
+
+#+BEGIN_DEFINITION
+Dans le cas considéré, on a une contrainte supplémentaire : une instruction ne peut pas, à la faveur du blocage d'une précédente, la doubler dans le pipeline. C'est ce qu'on appelle *in order execution*. C'est cette contrainte qui a été levée dans les processeurs modernes.
+#+END_DEFINITION
+
+#+BEGIN_THEOREM
+Si on a N le nombre de pipelines dans notre processeur superscalaire, on peut exécuter n instructions (n > N) en au mieux (n/N) + 1 cycles.
+
+Au pire, l'exécution prend autant de temps que dans un processus pipeliné classique (on ne peut passer d'instruction que dans le premier des N pipelines parallèles).
+#+END_THEOREM
+
+Ce type de processeur étant particulièrement sensible aux branchements (flush du tampon d'instruction obligatoire en cas de branchement réussi), on a intérêt à dérouler les boucles.
+
+Réessayons avec deux itérations d'un coup.
+
+**** Exemple, suite
+
+#+BEGIN_SRC mips
+  for:
+	  lw          $8,0($4)
+	  lw          $10,4($4)
+	  addiu       $4,$4,8
+	  sll         $8,$8,1
+	  sll         $10,$10,1
+	  sw          $8,-8($4)
+	  bne         $4,$5,for
+	  sw          $10,-4($4)
+#+END_SRC
+
+Cet exemple est déjà optimisé : on s'est permis de réordonnancer :
+
+| IB@endI | Inst  | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 |   |   |
+|---------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|         | lw    |   |   | E | M | W |   |   |   |   |    |    |   |   |
+| lw,lw   |       | I | D |   |   |   |   |   |   |   |    |    |   |   |
+|         | lw    |   |   | E | M | W |   |   |   |   |    |    |   |   |
+|---------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|         | addiu |   |   |   | E | M | W |   |   |   |    |    |   |   |
+| addiu   |       |   | I | D |   |   |   |   |   |   |    |    |   |   |
+| sll     | sll   |   |   |   | 0 | E | M | W |   |   |    |    |   |   |
+|---------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|         | sll   |   |   |   |   | E | M | W |   |   |    |    |   |   |
+| sll     |       |   |   | I | D |   |   |   |   |   |    |    |   |   |
+| sw      | nop*  |   |   |   |   | E | M | W |   |   |    |    |   |   |
+|---------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|         | sw    |   |   |   |   |   | E | M | W |   |    |    |   |   |
+| sw,bne  |       |   |   |   | I | D |   |   |   |   |    |    |   |   |
+| sw      | bne   |   |   |   |   |   | E | M | W |   |    |    |   |   |
+|---------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|         | sw    |   |   |   |   |   |   | E | M | W |    |    |   |   |
+| sw      |       |   |   |   |   | I | D |   |   |   |    |    |   |   |
+| x,y     | nop*  |   |   |   |   |   |   | E | M | W |    |    |   |   |
+|---------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|         | nop*  |   |   |   |   |   |   |   | E | M | W  |    |   |   |
+|         |       |   |   |   |   |   | I | D |   |   |    |    |   |   |
+|         | nop*  |   |   |   |   |   |   |   | E | M | W  |    |   |   |
+|---------+-------+---+---+---+---+---+---+---+---+---+----+----+---+---|
+|         |       |   |   |   |   |   |   |   |   |   |    |    |   |   |
+| lw,lw   |       |   |   |   |   |   |   | I |   |   |    |    |   |   |
+|         |       |   |   |   |   |   |   |   |   |   |    |    |   |   |
+
+Calcul du CPI et du CPI utile :
+
+Nombre de cycles pour le segment concerné :
+La première instruction effective après notre segment rentre dans le pipeline au cycle 7
+La première instruction effective de notre segment rentre dans le pipeline au cycle 1
+
+Notre segment prend donc 6 cycles pour s'exécuter.
+On a 8 instructions, dont 8 instructions utiles, le CPI égale donc le CPI utile égale 0.75
+
+[Vérifions quand même cette histoire de comptage des nop*]
+
+On voit que le déroulage de boucle, parce qu'il permet de rendre le coût fixe d'une instruction perdue après les branchements réussis petit devant le coût total de la boucle déroulée, permet de bien exploiter les possibilités du superscalaire.
+
+D'un autre côté, ce déroulage est nécessaire : avec la possibilité de faire passer deux instructions d'un coup dans le pipeline, les instructions se "rapprochent" les unes des autres, rendant les problèmes de dépendance plus aigus.
+
+Un autre problème survient avec l'étage M : autant dans l'étage I, vu qu'on savait qu'on allait chercher N mots d'instructions contigus d'un coup, on pouvait se contenter de simplement élargir la nappe de fils qui devaient aller chercher les instructions, sans avoir besoin d'augmenter le nombre de contrôleurs mémoire.
+
+Mais en ce qui concerne les lectures et les écritures dans la mémoire faites à l'étage M, on n'a aucune garantie que 2 écritures simultanées se fassent dans des octets/demi-mots/mots contigus (ni même que les écritures soient de la même taille, à dire vrai). On a donc deux solutions :
+- Interdire deux écritures/lectures mémoire simultanées, ce qui implique soit d'arranger les instructions d'accès mémoire de manière à ce qu'elles ne soient pas dans le même N-uplet de mots d'instructions (de plus en plus complexe avec N augmentant), soit d'introduire des cycles de gel (jusqu'à N-1 dans le pire des cas), ce qui diminue grandement l'intérêt du superscalaire.
+- Ajouter N contrôleurs à la mémoire de données, ce qui coûte extrêmement cher.
+
+#+BEGIN_THEOREM
+Quand on met un cycle de gel dans un des N pipeline séparés (en E, M ou W), on perd 1/N cycle (au lieu de 1 dans un pipeline classique).
+#+END_THEOREM
 
 
 * Annexes
