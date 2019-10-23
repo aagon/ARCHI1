@@ -40,6 +40,8 @@ Il faut faire les annales, la structure des examens est très classique.
 
 Le partiel portera sur les cours jusqu'au 4 compris.
 
+https://www-soc.lip6.fr/trac/sesi-m1archi/wiki
+
 
 * Cours 0 : 18/09/2019
 
@@ -1643,7 +1645,7 @@ Autrement dit, il faut exécuter plusieurs instructions par cycle : invention de
 
 **** Aparté : les pipeline parallèles
 
-L'idée d'avoir plusieurs pipeline n'est pas spécifique aux processeurs superscalaires. On sait que certaines opérations sont plus longues que d'autres : certains opérateurs comme l'addition, le shift, la comparaison bit à bit ont un temps de calcul algorithmique en le nombre de bits sur lequel ils sont appliqués, et certains autres (comme la multiplication) ne le sont pas du tout.
+L'idée d'avoir plusieurs pipeline n'est pas spécifique aux processeurs superscalaires. On sait que certaines opérations sont plus longues que d'autres : certains opérateurs comme l'addition, le shift, la comparaison bit à bit ont un temps de calcul logarithmique en le nombre de bits sur lequel ils sont appliqués, et certains autres (comme la multiplication) ne le sont pas du tout.
 
 La manière naïve de faire une multiplication de deux nombres écrits sur 32 bits chacun est la manière de multiplier qu'on a appris à l'école : on fait les multiplications chiffre par chiffre (ici, bit à bit), puis on additionne le résultat des multiplications. On a au maximum 31 additions.
 
