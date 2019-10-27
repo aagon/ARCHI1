@@ -1154,3 +1154,550 @@ Optimisation :
 Sans avoir besoin de faire le schéma simplifié, on a un CPI de 1.
 
 
+
+* Séance 5 : 22/10/2019
+
+** TD 3 : Suite
+
+*** Exercice 4
+
+**** Question a
+
+[La difficulté vient de l'interprétation à donner à la question]
+[Il fallait comprendre : le compilateur doit-il insérer des delayed slots ?]
+
+Oui, le compilateur va devoir insérer des delayed slots ?
+
+Combien y a-t-il de delayed slot à insérer ?
+3
+
+**** Question b
+
+On a des dépendances de données d'ordre 1 à 6. En effet, c'est seulement à partir de l'instruction i+7 qu'on est sûr qu'une opérande sera bien écrite dans le banc de registre avant sa lecture par l'étage DEC.
+
+Par contre, pour les instructions i+1 à i+6 compris.
+
+**** Question c
+
+Ordre par ordre :
+
+Ordre 1 : E2 fin -> E2 début (pas symétrique : 1 seul)
+
+#+BEGIN_SRC mips
+	  add         $5,$5,$6
+	  sw          $5,0($4)
+#+END_SRC
+
+On veut l'adresse [réexpliquer]
+
+Bypass sur RT seulement, l'instruction store est asymétrique
+
+Ordre 2 : E2 fin -> E1 début
+
+#+BEGIN_SRC mips
+	  add         $3,$4,$5
+	  nop
+	  add         $7,$3,$6
+#+END_SRC
+
+Bypass sur RS et RT, l'instruction add est symétrique
+
+Pas d'autre bypass d'ordre 2
+
+Ordre 3 : M2 -> E2
+
+#+BEGIN_SRC mips
+	  lw          $3,0($5)
+	  nop
+	  nop
+	  sw          $3,0($5)
+#+END_SRC
+
+Bypass sur RT, pas symétrique.
+
+Ordre 3 : E2 -> D2
+
+#+BEGIN_SRC mips
+	  add         $3,$4,$5
+	  nop
+	  nop
+	  add         $7,$3,$6
+#+END_SRC
+
+Bypass sur RT et RS, donc 2
+
+Ordre 4 : M2 -> E1
+
+#+BEGIN_SRC mips
+	  lw          $4,0($5)
+	  nop
+	  nop
+	  nop
+	  add         $6,$4,$7
+#+END_SRC
+
+Bypass sur RT et RS, symétrique (2)
+
+Ordre 4 : E2 -> D1
+
+#+BEGIN_SRC mips
+	  add         $5,$6,$7
+	  nop
+	  nop
+	  nop
+	  bne         $5,$8,label
+#+END_SRC
+
+Bypass sur RT et RS, symétrique (2)
+
+
+Ordre 5 : M1 -> D1 (symétrique)
+
+#+BEGIN_SRC mips
+	  add         $3,$4,$5
+	  nop
+	  nop
+	  nop
+	  nop
+	  bne         $3,$6,label
+#+END_SRC
+
+Ordre 5 : M2 -> D2 (symétrique)
+
+#+BEGIN_SRC mips
+	  lw          $3,0($4)
+	  nop
+	  nop
+	  nop
+	  nop
+	  add         $7,$3,$5
+#+END_SRC
+
+Ordre 6 : M2 -> D1 (symétrique)
+
+#+BEGIN_SRC mips
+	  lw          $3,0($4)
+	  nop
+	  nop
+	  nop
+	  nop
+	  nop
+	  bne         $3,$5,label
+#+END_SRC
+
+16 pipelines [à recompter]
+
+(Il y aurait toujours un exo avec un pipeline stupide : à refaire et à comprendre pour pouvoir refaire sur un pipeline arbitrairement débile)
+
+**** d
+
+Instructions qui produisent 1 cycle de gel.
+
+Ordre 1
+
+#+BEGIN_SRC mips
+	  add         $3,$4,$5
+	  add         $7,$3,$6
+#+END_SRC
+
+RAW, 1 cycle de gel
+
+
+Ordre 2
+
+#+BEGIN_SRC mips
+	  add         $3,$4,$5
+	  nop
+	  bne         $3,$6,label
+#+END_SRC
+
+RAW, 2 cycles de gel
+
+Ordre 3
+
+On reprend le précédent, ça fait juste un cycle de gel en moins.
+
+#+BEGIN_SRC mips
+	  add         $3,$4,$5
+	  nop
+	  nop         
+	  bne         $3,$6,label
+#+END_SRC
+
+RAW, 1 cycle de gel
+
+
+Ordre 4
+
+#+BEGIN_SRC mips
+	  lw          $3,0($4)
+	  nop
+	  nop
+	  nop
+	  bne         $3,$6,label
+#+END_SRC
+
+Deux cycles de gel
+
+Ordre 5
+
+La même, enlève un cycle de gel
+
+#+BEGIN_SRC mips
+	  lw          $3,0($4)
+	  nop
+	  nop
+	  nop
+	  nop
+	  bne         $3,$6,label
+#+END_SRC
+
+Un cycle de gel
+
+**** e
+
+#+BEGIN_SRC mips
+  loop:   
+	  lw          $8,0($4)
+	  bgez        $8,endif
+	  nop
+	  nop
+	  nop
+	  sub         $8,$0,$8
+	  sw          $8,0($4)
+
+  endif:
+	  addiu       $4,$4,4
+	  bne         $4,$9,loop
+	  nop
+	  nop
+	  nop
+#+END_SRC
+
+|       |  1 | 2  | 3  |  4 |  5 |  6 |  7 |      8 | 9     | 10 | 11 | 12 | 13 | 14 | 15 | 16     | 17    |     18 | 19    | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 |
+|-------+----+----+----+----+----+----+----+--------+-------+----+----+----+----+----+----+--------+-------+--------+-------+----+----+----+----+----+----+----+----+----|
+| lw    | I1 | I2 | D1 | D2 | E1 | E2 | M1 | M2 >-1 | W     |    |    |    |    |    |    |        |       |        |       |    |    |    |    |    |    |    |    |    |
+| bgez  |    | I1 | I2 |  0 |  0 |  0 |  0 |      0 | -> D1 | D2 | E1 | E2 | M1 | M2 | W  |        |       |        |       |    |    |    |    |    |    |    |    |    |
+| nop   |    |    | I1 |  0 |  0 |  0 |  0 |      0 | I2    | D1 | D2 | E1 | E2 | M1 | M2 | W      |       |        |       |    |    |    |    |    |    |    |    |    |
+| nop   |    |    |    |  0 |  0 |  0 |  0 |      0 | I1    | I2 | D1 | D2 | E1 | E2 | M1 | M2     | W     |        |       |    |    |    |    |    |    |    |    |    |
+| nop   |    |    |    |    |    |    |    |        |       | I1 | I2 | D1 | D2 | E1 | E2 | M1     | M2    |      W |       |    |    |    |    |    |    |    |    |    |
+| sub   |    |    |    |    |    |    |    |        |       |    | I1 | I2 | D1 | D2 | E1 | E2 >-1 | M1    |     M2 | W     |    |    |    |    |    |    |    |    |    |
+| sw    |    |    |    |    |    |    |    |        |       |    |    | I1 | I2 | D1 | D2 | E1     | -> E2 |     M1 | M2    | W  |    |    |    |    |    |    |    |    |
+| addiu |    |    |    |    |    |    |    |        |       |    |    |    | I1 | I2 | D1 | D2     | E1    | E2 >-1 | M1    | M2 | W  |    |    |    |    |    |    |    |
+| bne   |    |    |    |    |    |    |    |        |       |    |    |    |    | I1 | I2 | 0      | 0     |      0 | -> D1 | D2 | E1 | E2 | M1 | M2 |    |    |    |    |
+| nop   |    |    |    |    |    |    |    |        |       |    |    |    |    |    | I1 | 0      | 0     |      0 | I2    | D1 | D2 | E1 | E2 | M1 | M2 | W  |    |    |
+| nop   |    |    |    |    |    |    |    |        |       |    |    |    |    |    |    | 0      | 0     |      0 | I1    | I2 | D1 | D2 | E1 | E2 | M1 | M2 | W  |    |
+| nop   |    |    |    |    |    |    |    |        |       |    |    |    |    |    |    |        |       |        |       | I1 | I2 | D1 | D2 | E1 | E2 | M1 | M2 | W  |
+
+**** g
+
+Cette question suppose quasiment de refaire un schéma simplifié
+
+|       |  1 | 2  | 3  |  4 |  5 |  6 |  7 |      8 | 9     | 10 | 11 | 12 | 13 | 14 | 15 | 16     | 17    | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 | 26 | 27 | 28 |
+|-------+----+----+----+----+----+----+----+--------+-------+----+----+----+----+----+----+--------+-------+----+----+----+----+----+----+----+----+----+----+----|
+| lw    | I1 | I2 | D1 | D2 | E1 | E2 | M1 | M2 >-1 | W     |    |    |    |    |    |    |        |       |    |    |    |    |    |    |    |    |    |    |    |
+| bgez  |    | I1 | I2 |  0 |  0 |  0 |  0 |      0 | -> D1 | D2 | E1 | E2 | M1 | M2 | W  |        |       |    |    |    |    |    |    |    |    |    |    |    |
+| nop   |    |    | I1 |  0 |  0 |  0 |  0 |      0 | I2    | D1 | D2 | E1 | E2 | M1 | M2 | W      |       |    |    |    |    |    |    |    |    |    |    |    |
+| nop   |    |    |    |  0 |  0 |  0 |  0 |      0 | I1    | I2 | D1 | D2 | E1 | E2 | M1 | M2     | W     |    |    |    |    |    |    |    |    |    |    |    |
+| nop   |    |    |    |    |    |    |    |        |       | I1 | I2 | D1 | D2 | E1 | E2 | M1     | M2    | W  |    |    |    |    |    |    |    |    |    |    |
+| addiu |    |    |    |    |    |    |    |        |       |    | I1 | I2 | D1 | D2 | E1 | E2 >-1 | M1    | M2 | W  |    |    |    |    |    |    |    |    |    |
+| bne   |    |    |    |    |    |    |    |        |       |    |    | I1 | I2 | 0  | 0  | 0      | -> D1 | D2 | M1 | M2 | W  |    |    |    |    |    |    |    |
+| nop   |    |    |    |    |    |    |    |        |       |    |    |    | I1 | 0  | 0  | 0      | I2    | D1 | D2 | E1 | E2 | M1 | M2 | W  |    |    |    |    |
+| nop   |    |    |    |    |    |    |    |        |       |    |    |    |    |    |    |        | I1    | I2 | D1 | D2 | E1 | E2 | M1 | M2 | W  |    |    |    |
+| nop   |    |    |    |    |    |    |    |        |       |    |    |    |    |    |    |        |       | I1 | I2 | D1 | D2 | E1 | E2 | M1 | M2 | W  |    |    |
+
+Calcul du nombre de cycles en cas de branchement échoué : 20
+Calcul du nombre de cycles en cas de branchement réussi : 18
+Nombre de cycle moyen : 19
+
+Instructions brutes en cas de branchement échoué : 12
+Instructions brutes en cas de branchement réussi : 10
+Nombre d'instructions moyen : 11
+
+Instructions utiles en cas de branchement échoué : 6
+Instructions utiles en cas de branchement réussi : 4
+Nombre d'instructions utiles moyen : 5
+
+CPI moyen = 19 / 11
+CPI utile moyen = 19 / 5
+
+[Apparamment, un schéma simplifié ramène 2-3 points]
+
+**** h
+
+Optimisation :
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $8,0($4)
+	  addiu       $4,$4,4
+	  bgez        $8,endif
+	  nop
+	  nop
+	  sub         $8,$0,$8            # Execution spéculative
+	  sw          $8,-4($4)
+  endif:
+	  bne         $4,$9,loop
+	  nop
+	  nop
+	  nop
+#+END_SRC
+
+Cycles si branchement échoue : 15
+Cycles si branchement réussit : 13
+
+*** Exercice de partiel de 2012
+
+**** 1
+
+On a 5 delayed slots.
+
+**** 2
+
+On a des dépendances d'ordre 1 à 6.
+
+**** 3
+
+Les différents bypass, ordre par ordre :
+
+Ordre 1 : E2 fin -> E2 début (pas symétrique : 1 seul)
+
+#+BEGIN_SRC mips
+	  add         $5,$5,$6
+	  sw          $5,0($4)
+#+END_SRC
+
+On veut l'adresse au début de l'étage M, mais on ne peut la récupérer qu'en E2 au plus tard.
+
+
+Ordre 2 : E2 fin -> E1 début
+
+#+BEGIN_SRC mips
+	  add         $3,$4,$5
+	  nop
+	  add         $7,$3,$6
+#+END_SRC
+
+Bypass sur RS et RT, l'instruction add est symétrique
+
+
+Ordre 3 : M2 -> E2
+
+#+BEGIN_SRC mips
+	  lw          $3,0($5)
+	  nop
+	  nop
+	  sw          $3,0($5)
+#+END_SRC
+
+Bypass sur RT, pas symétrique.
+
+Ordre 3 : E2 -> D2 (ou M1 -> E1)
+
+#+BEGIN_SRC mips
+	  add         $3,$4,$5
+	  nop
+	  nop
+	  add         $7,$3,$6
+#+END_SRC
+
+Bypass sur RT et RS, donc 2 (opération add symétrique)
+
+Ordre 4 : M2 -> E1
+
+#+BEGIN_SRC mips
+	  lw          $4,0($5)
+	  nop
+	  nop
+	  nop
+	  add         $6,$4,$7
+#+END_SRC
+
+Bypass sur RT et RS, symétrique (2)
+
+
+Ordre 5 : M2 -> D2 (symétrique)
+
+#+BEGIN_SRC mips
+	  lw          $3,0($4)
+	  nop
+	  nop
+	  nop
+	  nop
+	  add         $7,$3,$5
+#+END_SRC
+
+Ordre 6 : M2 -> D1 (symétrique)
+
+#+BEGIN_SRC mips
+	  lw          $3,0($4)
+	  nop
+	  nop
+	  nop
+	  nop
+	  nop
+	  add         $3,$3,$5
+#+END_SRC
+
+**** 4
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $8,0($4)
+	  lw          $9,0($4)
+	  sub         $10,$8,$9
+	  bgez        $10, endif
+	  nop
+	  nop
+	  nop
+	  nop
+	  nop
+	  sub         $10,$9,$8
+  endif:
+	  sw          $10,0($5)
+	  addu        $5,$5,4
+	  addu        $4,$4,4
+	  bne         $4,$6,loop
+	  nop
+	  nop
+	  nop
+	  nop
+	  nop
+#+END_SRC
+
+schéma simplifié
+
+[à refaire à la maison, pour s'entraîner]
+
+**** 5
+
+[entraînement]
+
+**** 6
+
+Optimisation sans déroulage :
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $8,0($4)
+	  lw          $9,4($4)
+	  addiu       $5,$5,4
+	  addiu       $4,$4,4
+	  sub         $10,$8,$9
+	  bgez        $10,endif
+	  nop
+	  nop
+	  nop
+	  nop
+	  nop
+	  sub         $10,$9,$8
+  endif:
+	  bne         $4,$6,loop
+	  sw          $10,-4($5)
+	  nop
+	  nop
+	  nop
+	  nop
+#+END_SRC
+
+CPI et CPI utile [refaire les calculs]
+
+[la ]
+
+[la deuxième boucle optimisée]
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $8,0($4)
+	  lw          $9,4($4)
+	  addiu       $5,$5,4
+	  addiu       $4,$4,4
+	  sub         $10,$8,$9
+	  bne         $4,$6,loop
+	  slt         $11,$10,$0
+	  sub         $12,$0,$11
+	  xor         $10,$10,$12
+	  add         $10,$10,$11
+	  sw          $10,-4($5)
+#+END_SRC
+
+**** 7
+
+Déroulage de boucle. Dans le cas d'un else, il faut faire deux endif dans la boucle déroulée.
+
+Version déroulée
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $8,0($4)
+	  lw          $9,4($4)
+	  sub         $10,$8,$9
+	  bgez        $10,endif
+	  nop
+	  nop
+	  nop
+	  nop
+	  nop
+	  sub         $10,$9,$8
+  endif1:
+	  sw          $10,0($5)
+	  lw          $18,8($4)
+	  sub         $19,$9,$18
+	  bgez        $19,endif2
+	  nop
+	  nop
+	  nop
+	  nop
+	  nop
+	  sub         $19,$18,$9
+  endif2:
+	  sw          $19,4($5)
+	  addiu       $5,$5,8
+	  addiu       $4,$4,8
+	  bne         $4,$6,loop
+	  nop
+	  nop
+	  nop
+	  nop
+	  nop
+#+END_SRC
+
+Version optimisée :
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $8,0($4)
+	  lw          $9,4($4)
+	  lw          $18,8($4)
+	  addiu       $5,$5,8
+	  addiu       $4,$4,8
+	  sub         $10,$8,$9
+	  sub         $19,$9,$18
+	  bgez        $10,endif1
+	  nop
+	  nop
+	  nop
+	  nop
+	  nop
+	  sub         $10,$9,$8
+  endif1:
+	  bgez        $18,endif2
+	  nop
+	  nop
+	  nop
+	  nop
+	  nop
+	  sub         $19,$18,$9
+  endif2:
+	  bne         $4,$6,loop
+	  sw          $10,-8($5)
+	  sw          $19,-4($5)
+	  nop
+	  nop
+	  nop
+#+END_SRC
+
+Calcul du CPI et du CPI utile.
+
+
+

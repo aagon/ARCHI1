@@ -1877,6 +1877,32 @@ Quand on met un cycle de gel dans un des N pipeline séparés (en E, M ou W), on
 #+END_THEOREM
 
 
+* Cours 6 : 24/10/2019
+
+Deuxième cours de Karine.
+
+Rappels de déroulage de boucle.
+
+Principe du pipeline logiciel :
+
+Former une boucle avec des instructions qui viennent d'itérations différentes.
+
+On n'a pas besoin d'attendre la fin d'une instruction pour commencer la suivante. (principe général du pipeline)
+
+On peut découper le travail d'une boucle en N étapes.
+On peut commencer l'étape M d'une itération si l'étape M de l'itération précédente est terminée.
+
+
+Chaque étape produit des registres différents ! (Pendant du fait que chaque étage doit avoir ses propres registres) -> On va devoir renommer des registres
+Chaque étape doit produire exclusivement pour la suivante ! -> On va devoir rajouter des instructions de stockage.
+
+L'autre solution est de refaire le découpage. [refaire l'exemple 2 fait au tableau]
+
+Flot de contrôle ?
+On ne peut pas couper une instruction des instructions conditionnelles futures : on laisse forcément BB2 et BB3 (dans notre exemple) dans le même étage de pipeline logiciel.
+
+
+
 * Annexes
 
 Support de cours :
