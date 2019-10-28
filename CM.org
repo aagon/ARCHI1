@@ -1879,28 +1879,489 @@ Quand on met un cycle de gel dans un des N pipeline séparés (en E, M ou W), on
 
 * Cours 6 : 24/10/2019
 
-Deuxième cours de Karine.
+Suite du premier cours de Karine : Rappels de déroulage de boucle, et introduction au pipeline logiciel.
 
-Rappels de déroulage de boucle.
+** Rappels de déroulage de boucle
 
-Principe du pipeline logiciel :
+Prenons une boucle simple :
 
-Former une boucle avec des instructions qui viennent d'itérations différentes.
+#+BEGIN_SRC mips
+  loop:
+	  lw          $4,0($5)
+	  sll         $7,$4,1
+	  sw          $7,0($5)
 
-On n'a pas besoin d'attendre la fin d'une instruction pour commencer la suivante. (principe général du pipeline)
+	  addiu       $5,$5,4
+	  bne         $5,$9,loop
+	  nop
+#+END_SRC
 
-On peut découper le travail d'une boucle en N étapes.
-On peut commencer l'étape M d'une itération si l'étape M de l'itération précédente est terminée.
+Cette boucle lit 4 octets de mémoire dans un de ses registres, multiplie la quantité lue par deux, et réécrit le quantité modifiée à la même adresse.
 
+Il incrémente ensuite l'adresse de 4 octets, vérifie qu'on n'est pas past-the-end dans la boucle, et reprend son exécution au début de celle-ci.
 
-Chaque étape produit des registres différents ! (Pendant du fait que chaque étage doit avoir ses propres registres) -> On va devoir renommer des registres
-Chaque étape doit produire exclusivement pour la suivante ! -> On va devoir rajouter des instructions de stockage.
+Dans cette boucle, le premier bloc de trois instructions constitue véritablement le corps de la boucle. Appelons-les i1, i2 et i3.
 
-L'autre solution est de refaire le découpage. [refaire l'exemple 2 fait au tableau]
+Les dépendances dans le corps de la boucle sont les suivantes :
+- RAW de i2 vers i1, pour $4
+- RAW de i3 vers i2, pour $7
 
-Flot de contrôle ?
-On ne peut pas couper une instruction des instructions conditionnelles futures : on laisse forcément BB2 et BB3 (dans notre exemple) dans le même étage de pipeline logiciel.
+Si on considère la prochaine itération de la boucle, on a aussi :
+- WAR de i1(i+1) vers i2(i), pour $4
+- WAR de i2(i+1) vers i3(i), pour $7
 
+Ce sont les seules quatre dépendances qui concernent le corps de la boucle. Quand on arrange les instructions entre elles sur plusieurs itérations, on doit seulement prendre garde à garder les ordres suivants si on veut garder la sémantique en général :
+- i1(i) -> i2(i)
+- i2(i) -> i3(i)
+- i2(i) -> i1(i+1)
+- i3(i) -> i2(i+1)
+
+Le déroulage de boucle suppose le renommage de certains registres. Si on y pense bien, les dépendances WAR peuvent assez facilement être supprimées en se contentant d'écrire dans un autre registre que celui dans lequel on lisait avant. C'est le principe du *déroulage de boucle* qu'on a vu il y a deux semaines.
+
+** Introduction du pipeline logiciel
+
+*** Sur notre exemple
+
+Sans renommer de registres, et donc en respectant les dépendances WAR (les deux dernières de notre liste), on peut quand même dérouler la boucle.
+
+Sur 5 itérations, (i = 0; i < 5; ++i), ça donne :
+
+i1(0)
+i2(0)
+i1(1)
+
+i3(0)
+i2(1)
+i1(2)
+
+i3(1)
+i2(2)
+i1(3)
+
+i3(2)
+i2(3)
+i1(4)
+
+i3(3)
+i2(4)
+i1(4)
+
+Pour les trois blocs non-extrêmes, on s'aperçoit qu'on a le même motif :
+
+i3(i-2)
+i2(i-1)
+i1(i)
+
+Puisque le motif est constant, on peut simplement reformer une nouvelle boucle !
+
+#+BEGIN_DEFINITION
+On vient d'exhiber le principe du pipeline logiciel : former une boucle avec des instructions appartenant à des itérations différentes.
+
+L'idée rejoint celle du principe général du pipeline : on n'a pas besoin d'attendre la fin d'une itération avant de commencer les suivantes.
+#+END_DEFINITION
+
+Cette idée suppose en revanche une hypothèse très forte : les itérations doivent être indépendantes. L'opération d'intérêt (ici, la multiplication par une constante) ne doit pas dépendre des valeurs des itérations précédentes et suivantes. Par exemple, une moyenne mobile du style a[i] = 0.25a[i-1] + 0.5a[i] + 0.25a[i+1] ne fonctionnera pas bien.
+
+*** Généralisation
+
+Admettons qu'on puisse découper l'exécution en N étapes. On peut commencer l'étape M de l'itération i quand l'itération i-1 l'a terminée. Mais il faut aussi que les ressources nécessaires à l'étape M (les registres utilisés) aient été libérés : sinon, on écrase des valeurs pour l'itération i-1. En fait, il faut que les valeurs que l'itération i-1 a mis dans ces registres de fin d'étape M aient été traitées ou copiées ailleurs. Autrement dit, il faut que l'itération i-1 ait fini l'étape M+1.
+
+On peut donc lancer l'étape M de l'itération i juste après l'étape M+1 de l'itération i-1 :
+
+[[./CM6/pipeline.jpg][Enchaînement du pipeline]]
+
+On voit qu'on a un motif qui se répète, comme dans notre exemple plus haut.
+
+Le motif est le suivant :
+
+E6(i-5)
+E5(i-4)
+E4(i-3)
+E3(i-2)
+E2(i-1)
+E1(i)
+
+[[./CM6/motif.jpg][Motif de la nouvelle boucle]]
+
+La boucle ordonnance une étape de N itérations successives (N étant le nombre d'étapes du pipeline logiciel).
+
+Pour le début et la fin, on doit quand même remplir et vider le pipeline.
+
+*** Exemple complet
+
+Prenons une boucle.
+
+On a l'adresse mémoire a + i dans $6, et l'adresse mémoire a + N (past the end) en $10.
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $4,0($6)
+	  sll         $5,$4,1
+	  sw          $5,0($6)
+	  addiu       $6,$6,4
+	  bne         $10;$6,loop
+#+END_SRC
+
+**** Première étape
+
+Première étape : Déterminons dans la boucle ce qui fait partie du corps, et ce qui fait partie du contrôle de boucle en lui-même.
+
+Le corps de la boucle consiste en les trois premières instructions, le contrôle en les deux dernières.
+
+Analysons ensuite les dépendances (dépendantes de l'architecture) dans le corps de la boucle, et par rapport à la prochaine itération. (on suppose ici un MIPS à 5 étages)
+
+- RAW de i2 vers i1 pour $4
+- RAW de i3 vers i2 pour $5
+- WAR de i1(i+1) vers i2(i) pour $4
+- WAR de i2(i+1) vers i3(i) pour $5
+
+Cycles perdus (dépend aussi de l'architecture, on continue à supposer un MIPS à 5 étages) :
+
+- 1 cycle de gel entre i1 et i2 (on doit attendre la fin de M de i1 pour commencer E de i2)
+
+C'est tout !
+
+On coupe ensuite où il y a des cycles de gel, des dépendances, des limitations de performance. Dans notre cas, on va découper partout dans le corps de la boucle.
+
+E1 : lw $4,0($6)
+E2 : sll $5,$4,1
+E3 : sw $5,0($6)
+
+**** Deuxième étape
+
+Le corps de la nouvelle boucle sera constitué de :
+
+E3(i-2) : sw $5,?($6)
+E2(i-1) : sll $5,$4,1
+E1(i) : lw $4, ?($6)
+
+On a besoin de modifier les adresses de lecture et d'écriture pour tenir compte du fait qu'on manipule plusieurs itérations de la boucle originale d'un coup.
+
+#+BEGIN_THEOREM
+Généralisable à N :
+
+Soient E1, ..., En les étapes de découpage du pipeline logiciel.
+
+On considère les itérations de i-n+1 à i, i la plus ancienne.
+
+La nouvelle boucle sera formée des opérations :
+- E_{n}(i-n+1)
+- E_{n-1}(i-n+2)
+...
+- E_{2}(i-1)
+- E_{1}(i)
+#+END_THEOREM
+
+Les instructions de contrôle de la boucle sont quand même exécutées à chaque itération, en particulier l'incrémentation de 4 de l'adresse.
+
+Le corps de la nouvelle boucle, avec les adresses corrigées, sera donc :
+
+E3(i-2) : sw $5,-8($6)
+E2(i-1) : sll $5,$4,1
+E1(i) : lw $4,0($6)
+
+**** Troisième étape
+
+On met la gestion de boucle, autant entre les itérations, qu'au début et à la fin de celles-ci.
+
+On doit s'arrêter au bon moment : on ne doit pas faire de lecture d'adresses past the end.
+
+La nouvelle boucle se fait sur la range suivante : (i = 2; i < N; ++i)
+(ou alors (i = 0 ; i < N-2; ++i), comme vous voulez, la variable d'itération est muette)
+
+On doit donc ajouter au début :
+E1(0), E2(0), E1(1)
+
+Et à la fin :
+E3(N-2), E2(N-1), E3(N-1)
+
+Ce qui donne, en brut non optimisé :
+
+#+BEGIN_SRC mips
+  remplissage:
+	  lw          $4,0($6)            # Le remplissage du pipeline logiciel
+	  sll         $5,$4,1
+	  lw          $4,4($6)
+
+	  addiu       $6,$6,8             # On commence la boucle à i = 2
+  loop:
+	  sw          $5,-8($6)
+	  sll         $5,$4,1
+	  lw          $4,0($6)
+
+	  addiu       $6,$6,4
+	  bne         $6,$10,loop
+	  nop
+
+  vidage:
+	  sw          $5,-8($6)           # Le vidage du pipeline logiciel
+	  sll         $5,$4,1
+	  sw          $5,-4($6)
+#+END_SRC
+
+On a :
+- 1 cycle de gel entre lw et sll, lignes 2 et 3
+- 1 cycle de gel entre addiu et bne, lignes 12 et 13
+- Un nop après bne, ligne 14
+
+Optimisation :
+
+- On peut faire remonter le addiu de la ligne 6, qui fait l'initialisation de la bonne adresse avant le début de la boucle du pipeline logiciel, entre le lw et le sll des lignes 2 à 3. Attention, cette opération requiert de changer l'immédiat de l'opération lw de la ligne de 4, de 4 à -4.
+On se débarasse d'un cycle de gel.
+- On peut faire passer le lw de la ligne 9 à la place du nop de la ligne 13. Attention, cette opération requiert de changer l'immédiat de l'opération lw de 0 à -4.
+On se débarasse ainsi de l'opération nop
+- On peut remonter l'instruction addiu ou bien entre sw et sll, ou bien même avant sw. Si on choisit cette deuxième manière, on doit changer l'immédiat de la l'opération sw, qui doit passer de -8 à -12.
+De cette manière, on supprime le cycle de gel entre addiu et bne.
+
+Ce qui donne :
+
+#+BEGIN_SRC mips
+  remplissage:
+	  lw          $4,0($6)            # Le remplissage du pipeline logiciel
+	  addiu       $6,$6,8             # On commence la boucle à i = 2
+	  sll         $5,$4,1
+	  lw          $4,-4($6)
+
+  loop:
+	  sw          $5,-8($6)
+	  addiu       $6,$6,4
+	  sll         $5,$4,1
+
+	  bne         $6,$10,loop
+	  lw          $4,-4($6)
+
+  vidage:
+	  sw          $5,-8($6)           # Le vidage du pipeline logiciel
+	  sll         $5,$4,1
+	  sw          $5,-4($6)
+#+END_SRC
+
+De cette manière, sur le corps de la boucle (label "loop"), on a un CPI égale au CPI utile, égale à 1.
+
+*** Deuxième exemple complet
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $4,0($6)
+	  sll         $5,$4,1             # val * 2
+	  add         $5,$5,$4            # val = val * 2 + val, soit val * 3
+	  sw          $5,0($6)
+
+	  addiu       $6,$6,4             # Contrôle de boucle
+	  bne         $10,$6,loop
+	  nop
+#+END_SRC
+
+Analyse du corps :
+
+- RAW de sll à lw, pour $4 (1 cycle de gel)
+- RAW de add à sll pour $5
+- RAW de sw à add pour $5
+
+Plus le cycle de gel entre addiu et bne, qui ne concerne pas le corps mais le contrôle.
+
+On se propose de simplement découper le corps en 4 étapes.
+
+La boucle pipelinée, avec son remplissage, et son vidage, mais brute :
+
+#+BEGIN_SRC mips
+  remplissage:
+	  lw          $4,0($6)
+	  sll         $4,$4,1
+	  add         $5,$5,$4
+
+	  lw          $4,4($6)
+	  sll         $4,$4,1
+
+	  lw          $4,8($6)
+
+	  addiu       $6,$6,12            # On initialise i à 3
+
+  loop:
+	  sw          $5,-12($6)
+	  add         $5,$5,$4            # Erreur ici : On est en train d'ajouter a[i-1] à 2a[i]
+	  sll         $4,$4,1
+	  lw          $4,0($6)
+
+	  addiu       $6,$6,4
+	  bne         $6,$10,loop
+	  nop
+
+  vidage:
+	  sw          $5,-12($6)          # E4(N-3)
+
+	  add         $5,$5,$4            # E3(N-2)
+	  sw          $5,-8($6)           # E4(N-2)
+
+	  sll         $4,$4,1             # E2(N-1)
+	  add         $5,$5,$4            # E3(N-1)
+	  sw          $5,-4($6)           # E4(N-1)
+#+END_SRC
+
+On voit tout de suite que la boucle est vérolée :
+
+On ajoute a[i-1] à 2a[i] dans le registre $5, alors qu'on veut ajouter a[i] à 2a[i].
+
+E1 produit $4 utilisé en E2 et E3
+E2 produit $5 utilisé en E3
+E3 utilise $5 et $4 et produit $5 pour E4
+
+Le problème vient de ce qu'un étage produit des registres pour plusieurs autres étages à la fois, et donc de ce qu'un étage utilise un registre qui doit être utilisé par un autre. Certains registres sont écrasés avant d'être utilisés par tous les étages qui voulaient s'en servir.
+
+#+BEGIN_THEOREM
+Dans une boucle pipelinée, pour que la boucle soit correcte, on doit respecter ces deux conditions :
+- Chaque étape doit produire une valeur dans un registre différent des autres (sinon, on doit renommer des registres)
+- Chaque étape doit uniquement utiliser des valeurs de l'étape précédente, et produire pour l'étape suivante.
+#+END_THEOREM
+
+#+BEGIN_PROOF
+La première condition est évidente.
+
+L'évidence de la deuxième condition apparaît avec davantage de clarté et d'évidence quand on refait le parallèle avec le pipeline matériel : quand on voulait transmettre une valeur sur plusieurs étages, on était obligé d'utiliser un registre de pipeline différent à chaque étage. On ne peut pas copier un registre dans lui-même, on doit bien se rappeler le fait que l'instruction derrière nous veut écrire dans le même registre que nous. On ne peut pas non plus écrire dans le même registre dans lequel l'instruction devant nous veut écrire.
+
+Ici, les registres intermédiaires de pipeline doivent être remplacés par des registres visibles du banc de registre, mais les mêmes règles doivent être respectées.
+#+END_PROOF
+
+On va donc rectifier notre boucle, en allant de E1 vers E4 (donc du bas vers le haut) :
+
+#+BEGIN_SRC mips
+  remplissage:
+	  lw          $4,0($6)            # E1(0)
+
+	  sll         $5,$4,1             # E2(0)
+	  ori         $9,$4,0
+	  lw          $4,4($6)            # E1(1)
+
+	  add         $7,$5,$9            # E3(0)
+	  sll         $5,$4,1             # E2(1)
+	  ori         $9,$4,0
+	  lw          $4,8($6)            # E1(2)
+
+	  addiu       $6,$6,12            # On initialise i à 3
+
+  loop:
+	  sw          $7,-12($6)
+	  add         $7,$5,$9
+	  ori         $9,$4,0
+	  sll         $5,$4,1
+	  lw          $4,0($6)
+
+	  addiu       $6,$6,4
+	  bne         $6,$10,loop
+	  nop
+
+  vidage:
+	  sw          $7,-12($6)          # E4(N-3)
+	  add         $7,$5,$9            # E3(N-2)
+	  ori         $9,$4,0             # E2(N-1)
+	  sll         $5,$4,1
+
+	  sw          $7,-8($6)           # E4(N-2)
+	  add         $7,$5,$9            # E3(N-1)
+
+	  sw          $7,-4($6)           # E4(N-1)
+#+END_SRC
+
+On a du rajouter une instruction de transmission pure. On renomme le remplissage et le vidage du pipeline exactement comme on a renommé le corps de la boucle pipelinée.
+
+On pourrait s'amuser à optimiser cette série d'instructions, mais ce n'est pas l'objet ici.
+
+*** Les dépendances de contrôle
+
+Les choses se compliquent encore quand on rajoute des dépendances de contrôle dans la boucle à dérouler.
+
+Deux exemples :
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $3,0($4)
+	  bgez        $3,suite
+	  nop
+	  sub         $3,$0,$3
+	  sw          $3,0($4)
+  suite:
+	  addiu       $4,$4,4
+	  bne         $4,$10,loop
+	  nop
+#+END_SRC
+
+#+BEGIN_SRC mips
+  loop:
+	  lw          $3,0($4)
+	  bgez        $3,else
+	  nop
+	  addi        $3,$3,-1
+	  j           suite
+  else:
+	  addi        $3,$3,1
+  suite:
+	  sw          $3,0($4)
+	  addiu       $4,$4,4
+	  bne         $4,$10,loop
+	  nop
+#+END_SRC
+
+On s'entraîne à définir les blocs de base des deux exemples précédents.
+
+Exemple 1 :
+- 1 en-tête avant lw (début)
+- 1 en-tête après nop (post-branchement)
+- 1 en-tête avant addiu (cible d'un branchement)
+
+Exemple 2 :
+- 1 en-tête avant lw (début)
+- 1 en-tête après nop (post-branchement)
+- 1 en-tête avant le deuxième addi (cible d'un branchement)
+- 1 en-tête avant sw (cible d'un branchement)
+
+A partir de ces blocs de base, on peut dessiner le diagramme de flot de contrôle :
+
+[[./CM6/controle1.jpg][Diagramme de flot de contrôle 1]]
+
+Où peut-on couper l'itération ?
+
+#+BEGIN_THEOREM
+Un branchement ne peut pas être séparé des instructions vers lesquelles il fait peut-être sauter.
+
+Si une instruction est conditionnée à une autre, alors elle doit nécessairement être mise dans le même étage de pipeline logiciel que celle-là dont elle dépend.
+#+END_THEOREM
+
+Donc, on ne pourra couper que de cette manière-là (on ne pourra pas découper dans les carrés en pointillé, mais uniquement entre le contenu du carré d'une part, et qqch en dehors de celui-ci, d'autre part) :
+
+[[./CM6/controle2.jpg][Diagramme de flot de contrôle découpé]]
+
+*** Conclusion
+
+Pour résumer, quand on veut optimiser une boucle, on peut appliquer le principe du pipeline logiciel, qui fonctionne selon la même idée que le pipeline matériel : on n'a pas besoin d'attendre qu'une instruction soit terminée pour lancer la suivante. Les mêmes contraintes cependant doivent être respectées.
+
+Le principal intérêt est qu'on renomme moins de registres que le simple déroulage de boucle, qu'on se débarrasse des dépendances RAW, et donc des cycles de gel qui s'ensuivent, au prix minime de davantage de dépendances WAR, et aussi et surtout qu'on recomprime la taille du segment de texte du processus, ce qui est excellent pour la performance du cache.
+
+Les règles à retenir :
+
+On ne considère que le corps de la boucle, pas les instructions de contrôle de la boucle.
+
+On ne sépare jamais les instructions dépendantes d'un branchement de ce branchement dont elles dépendent.
+
+On coupe là où il y a des pertes de performance liées à des dépendances RAW et des cycles de gel.
+
+On vérifie que, comme dans le pipeline matériel :
+- Chaque étage produit dans un registre différent
+- Chaque étage consomme exactement du registre produit par l'étage d'avant, et produit exactement dans un unique registre, consommé uniquement par l'étage d'après : si besoin, on rajoute des instructions de transfert dans un registre libre à l'intérieur de l'étape.
+
+Pour que cette condition soit respectée, on peut aussi revoir le découpage : dans notre exemple plus haut, laisser :
+
+#+BEGIN_SRC mips
+	  sll         $5,$4,1
+	  add         $5,$5,$4
+#+END_SRC
+
+ensemble dans un même étage permet de respecter automatiquement la condition. Cet étage est une boîte noire, qui ne lit qu'un seul registre, $4, et qui n'en produit qu'un seul, $5, le second étant le triple du premier.
+
+En plus, dans ce cas, on n'avait même pas de cycle de gel qui justifiât un découpage.
+
+Découper entre ces deux instructions nous a forcé à rajouter une instruction de copie de registre, ce qui est dommageable pour les performances. Si on ne coupait pas, on se trouvait avec une boucle de pipeline plus courte d'une instruction, sans davantage de cycles de gel ou de nop.
+
+Le pipeline logiciel, contrairement au pipeline matériel, est *flexible sur le nombre d'étages en lequel il est découpé*. Autant on ne peut pas redécouper un pipeline MIPS à la volée quand ça nous arrange, selon les instructions du moment, autant on peut le faire avec un pipeline logiciel, pourvu que les conditions mentionnées plus haut soient respectées. Utilisons cette flexibilité à notre avantage, soyons économes sur les découpages là où nous pouvons nous le permettre.
 
 
 * Annexes
@@ -1908,5 +2369,6 @@ On ne peut pas couper une instruction des instructions conditionnelles futures :
 Support de cours :
 
 [[./CM4/cours4.pdf][Cours Karine 1]]
+[[./CM6/cours6.pdf][Cours Karine 2]]
 
 
