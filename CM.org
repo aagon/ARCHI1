@@ -2364,6 +2364,122 @@ Découper entre ces deux instructions nous a forcé à rajouter une instruction 
 Le pipeline logiciel, contrairement au pipeline matériel, est *flexible sur le nombre d'étages en lequel il est découpé*. Autant on ne peut pas redécouper un pipeline MIPS à la volée quand ça nous arrange, selon les instructions du moment, autant on peut le faire avec un pipeline logiciel, pourvu que les conditions mentionnées plus haut soient respectées. Utilisons cette flexibilité à notre avantage, soyons économes sur les découpages là où nous pouvons nous le permettre.
 
 
+* Cours 7 : 14/11/2019
+
+Début du cours sur la hiérarchie mémoire.
+
+Deux composants essentiels sont le processeur central et la mémoire centrale.
+
+Les contraintes posées par le processeur sur la mémoire :
+- 1 ou 2 accès par cycle
+- temps de cycle de la mémoire = temps de cycle du processeur
+- On veut un espace d'adressage de 4Go * le nombre de processus dans la machine (mémoire large)
+- Coût raisonnable
+
+On ne peut pas avoir une mémoire qui fait tout ça à la fois. Par contre on peut avoir plusieurs mémoires, qui peuvent respecter certaines contraintes.
+
+La mémoire statique respecte la première et la deuxième condition : ressemble à des registres du processeur, fait en silicium.
+
+Par contre, coûte cher : 2 inverseurs au moins (?), 6 transistors.
+
+[dessin de l'inverseur]
+
+#+BEGIN_DEFINITION
+Mémoire statique vs mémoire dynamique
+
+Mémoire statique : information est un bit, enregistré de manière statique. Circuit électronique maintient cette information. Un dispositif actif (une porte logique) maintient cette valeur. On utilise les mêmes portes logiques que le processeur, on a donc les mêmes performances.
+#+END_DEFINITION
+
+Si on essaie de faire une mémoire pas chère avec cette technologie, on a à peine quelque Ko à quelques Mo.
+
+Un autre mémoire, c'est la mémoire dynamique (couramment appelé RAM) :
+3-10 cycles par accès (plus même).
+
+Silicium aussi. On peut avoir quelques Mo à quelques Go.
+
+Dynamique : pas maintenu par un dispositif électronique, mais maintenu par une capacité (?) : cette capacité fuit un peu, il faut fréquemment réécrire les informations (toutes les ms, à peu près).
+
+Une capacité (un condensateur) stocke les informations de manière passive : je déconnecte la capacité, on a les valeurs qui restent dans la capacité (fuite à peu près).
+
+[dessin de la capacité]
+
+Le disque dur : de quelque Go à plusieurs To. Pas du silicium, du matériel magnétique.
+Accès mécanique.
+Quelques ms d'accès (10ms)
+
+La bande magnétique
+Quelques To à plusieurs Po.
+10 minutes d'accès
+Encore moins cher : plastique
+
+La bonne manière, c'est de mélanger les différents types de mémoire. Le processeur est censé s'adresser successivement aux différentes mémoire, de la plus rapide à la moins rapide.
+
+Exemple :
+
+P -> MS (1 cycle, 4Ko) -> MD (10 cycles, 4Mo) -> DD (10^6 cycles, 4Go)
+
+Si on suppose une adresse demandée par le processeur choisie selon une loi uniforme sur 4Go, alors le nombre de cycles pour un accès mémoire sera très proche de 10^6.
+
+Bien entendu, le processeur n'accède pas à toutes les adresses selon une distribution uniforme.
+
+Très haute probabilité autour de la dernière adresse accédée, de manière assez universelle en le programme : propriété de localité spatiale des programmes.
+
+On peut exploiter ça en ramenant plus que les données d'intérêt dans les mémoires plus rapides : on ramène un *bloc mémoire* (quelques dizaines d'octets : 32, 64, 128).
+
+A partir de maintenant, la première mémoire statique sera appelée *cache*, la deuxième mémoire dynamique sera appelée *RAM*, ou *mémoire centrale*, ou *mémoire primaire*, le disque dur sera la *mémoire secondaire*.
+
+[Rappel du calcul en cas de cache miss : 8,9]
+
+En élargissant la nappe de fils de la mémoire vers le cache, on réduit énormément le nombre de cycles. Coûte cher, mais très efficace.
+
+Une partie des 10 cycles pris en exemple est dû à l'attente pour le bus système, utilisé par tous les périphériques.
+
+On doit payer le temps d'accès au bus, plus le temps de décodage de l'adresse, indépendemment de la quantité d'octets qu'on va chercher.
+
+Temps d'accès = Forfait + Coût d'un transfert * (Taille bloc / Taille bus)
+En général A >> B. Ici A = 9 et B = 1. Le fait que le forfait est toujours beaucoup plus cher que le coût du transfert fait que le cache est archi worth.
+
+(Attention, bus != nappe de fils mémoire.)
+
+Le cache et la mémoire sont organisés en blocs, pas en mots.
+
+
+Où je mets les choses dans le cache ?
+
+Trois types de cache :
+- Direct mapping (correspondance directe entre le numéro du bloc dans la mémoire et l'emplacement dans lequel le stocker)
+- Set associative (chaque numéro de bloc peut atterrir dans un ensemble d'emplacements)
+- Full associative (chaque numéro de bloc peut atterrir où il veut)
+
+Les premiers sont les plus simples.
+
+Comment répartir les blocs en partitions ? On s'efforce de respecter la propriété spatiale : dans le cas d'un direct mapping, on s'arrangera pour que la distance minimale entre deux blocs d'un même emplacement soit maximale.
+
+A quoi ressemble le cache direct mapping du point de vue matériel ?
+
+Pour la mémoire principale :
+
+5 bits de poids faible de l'adresse vont désigner le shift depuis le début du bloc (on part du principe que les blocs font 32 octets)
+Les bits de poids fort donnent le numéro du bloc.
+
+Pour le cache : 
+- 5 bits de poids faible : shift
+- Numéro d'emplacement
+- Etiquette du bloc dans l'emplacement
+
+2 emplacements du cache :
+- Directory stocke les étiquettes des blocs
+- Data stocke les données
+
+De cette manière, le cache ne doit que comparer l'étiquette envoyée par le processeur, avec celle stockée dans directory pour l'emplacement demandé par le processeur. C'est le miss.
+
+Les données sont envoyées de manière inconditionnelle. Le miss précise au processeur si il doit tenir compte des données qui lui ont été envoyées.
+
+On a un bit de présence dans la partie directory du cache, qui dit si l'emplacement contient ou non un bloc.
+
+Le miss est conditionné ou bien à ce que le bit de présence est de 0, ou bien à ce que le tag du directory ne corresponde pas à celui de l'instruction d'accès mémoire.
+
+
 * Annexes
 
 Support de cours :
