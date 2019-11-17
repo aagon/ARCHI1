@@ -2366,9 +2366,11 @@ Le pipeline logiciel, contrairement au pipeline matériel, est *flexible sur le 
 
 * Cours 7 : 14/11/2019
 
-Début du cours sur la hiérarchie mémoire.
+Ce cours commence la partie sur la hiérarchie mémoire qui durera jusqu'à la fin du cours.
 
-Deux composants essentiels sont le processeur central et la mémoire centrale.
+Les deux composants essentiels d'un ordinateur sont le processeur central et la mémoire centrale.
+
+Au fur et à mesure qu'on rend les processeurs de plus en plus puissants avec les innovations qu'on a vu pendant la première partie les contraintes posées par le processeur sur la mémoire sont de plus en plus fortes.
 
 Les contraintes posées par le processeur sur la mémoire :
 - 1 ou 2 accès par cycle
@@ -2376,109 +2378,195 @@ Les contraintes posées par le processeur sur la mémoire :
 - On veut un espace d'adressage de 4Go * le nombre de processus dans la machine (mémoire large)
 - Coût raisonnable
 
-On ne peut pas avoir une mémoire qui fait tout ça à la fois. Par contre on peut avoir plusieurs mémoires, qui peuvent respecter certaines contraintes.
+Il n'existe pas, à ce jour, de mémoire qui respecte ces quatre conditions à la fois. On peut en revanche concevoir plusieurs types de mémoire qui respectent chacun un sous-ensemble de ces contraintes.
 
-La mémoire statique respecte la première et la deuxième condition : ressemble à des registres du processeur, fait en silicium.
-
-Par contre, coûte cher : 2 inverseurs au moins (?), 6 transistors.
-
-[dessin de l'inverseur]
+** Les différents type de mémoire
 
 #+BEGIN_DEFINITION
 Mémoire statique vs mémoire dynamique
 
-Mémoire statique : information est un bit, enregistré de manière statique. Circuit électronique maintient cette information. Un dispositif actif (une porte logique) maintient cette valeur. On utilise les mêmes portes logiques que le processeur, on a donc les mêmes performances.
+Mémoire statique : information est un bit, enregistré de manière statique. On a un circuit électronique qui maintient activement cette information. Un dispositif actif (deux fois deux transistors qui constituent deux inverseurs tête-bêche, garantissant que la donnée garde sa valeur malgré un bruit tolérable) maintient cette valeur. On utilise les mêmes portes logiques que le processeur, on a donc les mêmes performances. Chaque bit nécessite au moins 6 transistors (4 pour les deux inverseurs, qui sont une autre manière de nommer les portes logiques not, plus 2 pour relier les inverseurs aux lignes de données).
+
+[[./CM7/sram.png][Mémoire statique]]
+
+Mémoire dynamique : stocke aussi un bit (même s'il est possible de stocker plus, avec les technologies actuelles). La donnée est stockée de manière passive dans une capacité (ou un capaciteur, ou un condensateur) : une tension gardée correspond à une valeur de bit. Si on est capable de stocker de manière fiable plus que deux valeurs de tension, alors on peut stocker deux voire trois bits de donnée (ce qui coûte donc respectivement une précision de quatre et huit valeurs aisément distinguables). Déconnecter la capacité permet de figer les valeurs de tension connectées dans cette capacité. On a par contre un phénomène de fuite, ce qui fait que les données doivent être rafraîchies régulièrement (toutes les ms).
+
+[[./CM7/dram.png][Mémoire dynamique]]
 #+END_DEFINITION
+
+*** La mémoire statique
+
+La mémoire statique respecte la première et la deuxième condition : elle est d'accès très rapide.
+
+Ce matériel est fabriqué en silicium. Il ressemble un peu aux registres du processeur, il est d'ailleurs fabriqué avec les mêmes technologies.
+
+Par contre, coûte cher : 6 transistors par bit.
 
 Si on essaie de faire une mémoire pas chère avec cette technologie, on a à peine quelque Ko à quelques Mo.
 
-Un autre mémoire, c'est la mémoire dynamique (couramment appelé RAM) :
-3-10 cycles par accès (plus même).
+*** La mémoire dynamique
 
-Silicium aussi. On peut avoir quelques Mo à quelques Go.
+Un autre mémoire, c'est la mémoire dynamique :
+3-10 cycles par accès.
 
-Dynamique : pas maintenu par un dispositif électronique, mais maintenu par une capacité (?) : cette capacité fuit un peu, il faut fréquemment réécrire les informations (toutes les ms, à peu près).
+Silicium aussi. On peut avoir quelques Mo à quelques Go à un prix raisonnable.
 
-Une capacité (un condensateur) stocke les informations de manière passive : je déconnecte la capacité, on a les valeurs qui restent dans la capacité (fuite à peu près).
+*** Le disque dur
 
-[dessin de la capacité]
+Le disque dur : pour un prix raisonnable, de quelques Go à plusieurs To.
 
-Le disque dur : de quelque Go à plusieurs To. Pas du silicium, du matériel magnétique.
+Pas du silicium, du matériel métallique magnétique.
+
 Accès mécanique.
-Quelques ms d'accès (10ms)
+Quelques ms d'accès (10ms, soit 10 millions de cycles)
 
-La bande magnétique
-Quelques To à plusieurs Po.
-10 minutes d'accès
+*** La bande magnétique
+
+Pour un prix raisonnable, quelques To à plusieurs Po.
+10 minutes d'accès : accès séquentiel, il faut mettre la bobine au bon endroit avant d'accéder aux données.
 Encore moins cher : plastique
 
-La bonne manière, c'est de mélanger les différents types de mémoire. Le processeur est censé s'adresser successivement aux différentes mémoire, de la plus rapide à la moins rapide.
+*** Retour à nos contraintes
 
-Exemple :
+On le voit immédiatement, aucun de ces quatre matériels ne respecte les quatre contraintes qu'on a énoncé plus haut. Par contre, chacune d'entre-elle en respecte un sous-ensemble.
 
-P -> MS (1 cycle, 4Ko) -> MD (10 cycles, 4Mo) -> DD (10^6 cycles, 4Go)
+La solution intuitive est de mélanger les différents types de mémoire. Le processeur est censé s'adresser successivement aux différentes mémoires, de la plus rapide à la moins rapide.
 
-Si on suppose une adresse demandée par le processeur choisie selon une loi uniforme sur 4Go, alors le nombre de cycles pour un accès mémoire sera très proche de 10^6.
+*** Exemple
 
-Bien entendu, le processeur n'accède pas à toutes les adresses selon une distribution uniforme.
+On suppose une mémoire statique avec temps d'accès d'un cycle, de 4 Ko, une mémoire dynamique qui demande 10 cycles pour un accès, et propose 4 Mo, et un disque dur qui réclame 1 million de cycles par accès, et propose 4 Go.
 
-Très haute probabilité autour de la dernière adresse accédée, de manière assez universelle en le programme : propriété de localité spatiale des programmes.
+Si on suppose que les processeur demande à accéder à une adresse choisie selon une loi uniforme sur [0, 4*10^9], alors l'espérance du nombre de cycles pour un accès mémoire sera en fait très proche de 10^6.
+
+Le calcul exact est donné par E = 1 * (10^-6) + 10 * (10^-3 - 10^-6) + 10^6 * (1 - 10^-3).
+
+Bien heureusement, le processeur ne demande pas d'accéder à des adresses choisies selon une loi uniforme sur la totalité de l'espace d'adressage donné par le disque dur.
+On peut en fait supposer deux propriétés sympathiques, et ce de manière assez universelle en le type du programme :
+- La localité spatiale : les adresses demandées dans un programme sont proches les unes des autres : les instructions sont placées de manière séquentielle dans des boucles ou des fonctions, les données sont placées sur une pile, ou avec un peu de chance en tous cas de manière contigüe.
+- La localité temporelle : la probabilité d'accéder à une adresse proche de la dernière adresse accédée est plus élevée que la probabilité d'accéder à une adresse proche d'une adresse accédée il y a 10000 cycles.
+
+Ces deux propriétés doivent être exploitées, si on veut pouvoir avoir besoin de moins d'un million de cycles en moyenne pour accéder à un octet : l'idée est de ramener plus que la donnée d'intérêt des mémoires lentes au mémoire rapides, de ramener un *bloc mémoire* autour de cette donnée. Ce bloc fait en général quelques dizaines d'octets (32, 64, 128).
 
 On peut exploiter ça en ramenant plus que les données d'intérêt dans les mémoires plus rapides : on ramène un *bloc mémoire* (quelques dizaines d'octets : 32, 64, 128).
 
-A partir de maintenant, la première mémoire statique sera appelée *cache*, la deuxième mémoire dynamique sera appelée *RAM*, ou *mémoire centrale*, ou *mémoire primaire*, le disque dur sera la *mémoire secondaire*.
+A partir de maintenant, la première mémoire statique sera appelée *cache*, la deuxième mémoire dynamique sera appelée *RAM*, ou *mémoire centrale*, ou *mémoire primaire*, le disque dur sera la *mémoire secondaire*. On oublie la mémoire magnétique pour le moment, elle n'est pas utilisée dans les ordinateurs habituels.
 
-[Rappel du calcul en cas de cache miss : 8,9]
+Le processeur est censé demander d'abord au cache si un octet ou un mot s'y trouve. Si l'octet ou le mot ne s'y trouve pas, le bloc entier est alors ramené de la mémoire centrale vers le cache.
+
+Le temps que cela prend se calcule de la manière suivante :
+
+On part du principe qu'on a des blocs de 32 octets, et que la largeur du bus est d'un mot mémoire.
+Ramener les 8 mots mémoire (on est dans une architecture 32 bits) de la mémoire vers le cache prend donc 80 cycles.
+
+Si on part du principe que le cache miss a une probabilité de 0.1, alors l'espérance du temps d'accès à l'octet ou au mot mémoire est donnée par :
+E = 0.9 * 1 + 0.1 * 10 * 8 = 8.9
+
+C'est assurément mieux que 1 million, mais c'est encore trop, d'autant plus qu'on a fait une hypothèse assez généreuse sur la proba du cache miss.
+
+
+
+
 
 En élargissant la nappe de fils de la mémoire vers le cache, on réduit énormément le nombre de cycles. Coûte cher, mais très efficace.
 
-Une partie des 10 cycles pris en exemple est dû à l'attente pour le bus système, utilisé par tous les périphériques.
+Analysons plus précisément les 10 cycles nécessaire pour l'accès à la mémoire : en fait, une partie de ces 10 cycles est due :
+- Au décodage de l'adresse
+- À l'attente pour l'accès au bus système
 
-On doit payer le temps d'accès au bus, plus le temps de décodage de l'adresse, indépendemment de la quantité d'octets qu'on va chercher.
+#+BEGIN_DEFINITION
+Le bus système
 
-Temps d'accès = Forfait + Coût d'un transfert * (Taille bloc / Taille bus)
-En général A >> B. Ici A = 9 et B = 1. Le fait que le forfait est toujours beaucoup plus cher que le coût du transfert fait que le cache est archi worth.
+Le bus système est un système de communication entre les différents périphériques d'une machine, partagé entre plusieurs (plus de deux) périphériques. On distingue ce système de la liaison de point à point, à l'usage exclusif des deux matériels situé à chaque extrémité. On a potentiellement, à chaque moment, plusieurs éléments qui désirent accéder au bus pour écrire des octets à destination d'autres éléments. Comme le bus, qui est en fait un fil, ne peut transmettre qu'une information "à la fois", disons sur une unité atomique de temps et d'espace à déterminer, il ne peut en fait être utilisé que par un matériel à la fois. Cette contrainte suppose l'existence d'un *arbitre de bus*, ou d'un *contrôleur de bus*, une espèce d'ordonnanceur d'accès au bus.
 
-(Attention, bus != nappe de fils mémoire.)
+La vitesse du bus système est un des goulets d'étranglement les plus importants de la puissance d'un ordinateur, c'est aussi une des grandeurs les plus coûteuses à faire passer à l'échelle.
+#+END_DEFINITION
+
+Donc, indépendemment de la quantité de données qu'on va chercher, on doit toujours payer un temps forfaitaire pour le décodage de l'adresse plus l'accès au bus.
+
+Le temps d'accès total est donc donné par :
+
+T = A + B * (Taille bloc en mots / Taille bus en mots)
+
+Avec A qui désigne le forfait, et B le coût du transfert d'un mot mémoire.
+
+En général, pour des raisons qu'on ne rappellera pas ici, A domine très largement B. C'est précisément le fait que le forfait est très cher devant le coût du transfert que les transferts en gros, et donc les tampons et les caches, sont beaucoup beaucoup plus efficace que les transferts au détail.
+
+Si on suppose dans notre exemple que A = 9 et B = 1, et si on suppose toujours les mêmes probabilités de cache miss et de cache hit, et si on suppose encore que la taille du bus est de 4 octets, de même que la taille du bloc est de 32, alors le temps espéré d'accès à l'octet ou au mot d'intérêt est donné par :
+E = 0.9 * 1 + 0.1 * (9 + 1 * 8) = 0.9 + 0.9 + 0.8 = 2.6
+
+Ce qui est beaucoup mieux : 2.6 cycles en moyenne pour accéder à un mot, en supposant une proba de miss de 0.1, c'est tout-à-fait acceptable.
+
+** Organisation des mémoires
 
 Le cache et la mémoire sont organisés en blocs, pas en mots.
 
+Comment sont organisées les données dans le cache et la mémoire centrale ?
 
-Où je mets les choses dans le cache ?
+On dit que la mémoire est divisée en blocs, et que le cache est divisé en blocs, ou plutôt en emplacements qui permettent d'accueillir des blocs. Bien entendu, les blocs de la mémoire centrale font la même taille que les blocs, ou emplacements de blocs, du cache.
 
-Trois types de cache :
-- Direct mapping (correspondance directe entre le numéro du bloc dans la mémoire et l'emplacement dans lequel le stocker)
+Dans la suite, on nommera blocs des blocs de la mémoire centrale et emplacements les emplacements de blocs dans le cache. On a bien entendu bien plus de blocs que d'emplacements.
+
+On distingue trois types de cache quand à la correspondance entre les blocs et les emplacements :
+- Direct mapping (chaque numéro de bloc peut atterrir à un et un seul emplacement)
 - Set associative (chaque numéro de bloc peut atterrir dans un ensemble d'emplacements)
 - Full associative (chaque numéro de bloc peut atterrir où il veut)
 
-Les premiers sont les plus simples.
+On voit immédiatement que le dernier des trois types est le meilleur, il nous laisse la plus grande liberté dans les blocs qu'on pourra effectivement avoir dans le cache à un moment arbitraire. C'est aussi potentiellement le plus coûteux en matériel et en overhead.
 
-Comment répartir les blocs en partitions ? On s'efforce de respecter la propriété spatiale : dans le cas d'un direct mapping, on s'arrangera pour que la distance minimale entre deux blocs d'un même emplacement soit maximale.
+*** Le direct mapping
+
+Correspondance la plus simple.
+
+Dans la mesure où on a bien plus de blocs que d'emplacements, on doit partitionner l'ensemble des blocs d'une certaine manière à pouvoir à chaque partition associer un emplacement dans lequel tous les blocs de la partition iront se loger.
+
+La partition la plus intelligente, si on se rappelle les propriétés de localité spatiale et temporelle des programmes, c'est la partition telle que la distance minimale entre deux blocs devant se loger dans un même emplacement soit maximale égale à la taille du cache en nombre d'emplacements.
+
+En effet : on voudrait que si un bloc n doit se loger dans un emplacement m, les blocs n+1 et n-1 puissent chacun se loger dans deux emplacements distincts deux à deux et différents de m. Sinon, il ne sera pas possible d'avoir à la fois les blocs n-1, n, n+1 dans le cache, ce qui est une source sûre de gâchis étant donné les propriétés de localité spatiale et temporelles des programmes. Ce raisonnement reste valable tant qu'il reste des emplacements dans le cache.
+
+#+BEGIN_DEFINITION
+Optimisation de la partition :
+
+Le critère d'optimisation des partitions est donné par la plus grande série de blocs contigus de la mémoire centrale qu'une partition permet au cache de stocker à n'importe quel moment. Plus simplement dit, plus une partition permet à un cache de stocker au même instant une plus grande série de blocs contigus, meilleure elle est. De surcroît, la série de blocs contigus de taille maximale est donné par la taille du cache en nombre d'emplacements.
+#+END_DEFINITION
+
+#+BEGIN_THEOREM
+Théorème :
+
+Soit M la taille du cache en nombre d'emplacements, emplacements indexés de 0 à M-1, et N la taille de la mémoire centrale en blocs, blocs indexés de 0 à N-1. La partition qui associe le bloc i à l'emplacement j, avec i congruent à j modulo M, est optimale selon le critère donné plus haut.
+#+END_THEOREM
+
+#+BEGIN_PROOF
+La démonstration est évidente, et suit de l'exemple pris plus haut. On pourra aussi se refaire le dessin des colonnes présenté par Pirouz.
+#+END_PROOF
+
+**** Implantation matérielle
 
 A quoi ressemble le cache direct mapping du point de vue matériel ?
 
-Pour la mémoire principale :
+On part toujours du principe que les blocs font 32 octets, et que la taille du mot mémoire est de 32 bits.
 
-5 bits de poids faible de l'adresse vont désigner le shift depuis le début du bloc (on part du principe que les blocs font 32 octets)
-Les bits de poids fort donnent le numéro du bloc.
+Etant donné ce matériel, à quoi ressemble une adresse mémoire pour les différents composants. On sait déjà que l'adresse s'écrit sur 32 bits.
 
-Pour le cache : 
-- 5 bits de poids faible : shift
-- Numéro d'emplacement
-- Etiquette du bloc dans l'emplacement
+Pour la mémoire principale, les 5 bits de poids faible vont désigner le décalage en octets depuis le début du bloc (car les blocs font 32 octets). Les bits de poids fort donnent le numéro du bloc.
+Si on admet une taille de bloc à 64 (respectivement 128 octets), on devra attribuer les 6 (respectivement 7) octets de poids faible au décalage depuis le début du bloc. Mais puisqu'il y aura 2 (respectivement 4) fois moins de blocs (on a toujours au maximum 2^32 adresses), on pourra quand même nommer toutes les octets.
 
-2 emplacements du cache :
-- Directory stocke les étiquettes des blocs
-- Data stocke les données
+Pour le cache, c'est un peu plus compliqué : les 5 bits de poids faible vont toujours désigner le décalage en octets par rapport au début du bloc, mais les bits de poids fort seront séparés en les bits qui serviront à donner le numéro de l'emplacement, et en les bits qui serviront à donner *l'étiquette* du bloc dans l'emplacement. Si on admet que le nombre d'emplacements dans un cache est une puissance de 2 (et ça doit être le cas, sinon c'est du gâchis de bits), alors le nombre total de bits utilisés pour écrire le numéro de l'emplacement est donné par log_2(nombre d'emplacements), qui est une quantité entière.
 
-De cette manière, le cache ne doit que comparer l'étiquette envoyée par le processeur, avec celle stockée dans directory pour l'emplacement demandé par le processeur. C'est le miss.
+L'étiquette du bloc est donc un nombre écrit sur (taille du mot mémoire) - log_2(nombre d'emplacements du cache) - log_2(taille du bloc en octets) bits.
 
-Les données sont envoyées de manière inconditionnelle. Le miss précise au processeur si il doit tenir compte des données qui lui ont été envoyées.
+Le cache est séparé en deux parties, la partie *directory* qui stocke les étiquettes des blocs et la partie *data*, qui stocke les données des blocs. Chaque partie a donc le même nombre d'emplacements, le nombre d'emplacements du cache donné plus haut.
 
-On a un bit de présence dans la partie directory du cache, qui dit si l'emplacement contient ou non un bloc.
+Dans la partie directory du cache, on a un bit de présence pour chaque emplacement, qui dit si l'emplacement contient ou non un bloc.
 
-Le miss est conditionné ou bien à ce que le bit de présence est de 0, ou bien à ce que le tag du directory ne corresponde pas à celui de l'instruction d'accès mémoire.
+Quand le processeur central demande une adresse, celle-ci est formatée de la même manière que pour le cache : en effet, le processeur ne parle qu'à son cache pour le moment. Le fait que la notion d'étiquette ou d'emplacement, ou de bloc, ou de décalage par rapport au bloc n'aient pas de sens pour le processeur n'est pas un problème ici : il se trouve simplement que l'adresse demandée par le processeur à son cache se conforme au formatage donné plus haut pour le cache. Le contrôleur du cache compare les (taille du mot mémoire) - log_2(nombre d'emplacements du cache) - log_2(taille du bloc en octets) (soit ici 24) bits de poids fort de l'adresse envoyée par le processeur aux 24 bits stockés dans la partie directory de l'emplacement donné par les bits 24 à 26 (dans notre exemple à 8 emplacements) de l'adresse envoyée par le processeur. Si ces 24 bits-ci sont les mêmes que ces 24 bits-là, et que le bit de présence idoine est à 1, alors on sait que le contenu de l'emplacement est valable.
 
+Dans ce cas, le cache envoie les données au processeur. Quand une au moins de ces conditions n'est pas respectée, soit le bit de présence idoine à 0, soit une non-correspondance entre les 24 bits de poids fort de l'adresse envoyée par le processeur, et les 24 bits stockés dans l'emplacement idoine de la partie directory du cache, que se passe-t-il ?
+
+Les données sont quand même envoyée, *mais* par un autre fil est envoyé un bit de "miss" qui est mis a 1 quand une de ces conditions n'est pas respectée : ce bit de miss dit simplement au processeur de ne pas tenir compte des données envoyée.
+
+Cette mise en place, qui semble contre-intuitive (pourquoi ne pas simplement conditionner l'envoi des données à leur validité ?), est en fait la moins coûteuse en matériel : on envoie les données sans se poser de question, et au prix seulement d'un comparateur et d'une porte logique NAND, on indique si les données sont valables. *Ce coût de la validation est constant en la quantité de données effectivement envoyées au processeur*, et promet donc de bien passer à l'échelle.
+
+[[./CM7/cache.png][Illustration du cache]]
 
 * Annexes
 
