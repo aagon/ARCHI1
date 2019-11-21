@@ -1701,3 +1701,85 @@ Calcul du CPI et du CPI utile.
 
 
 
+
+* Séance 6 : 19/11/2019
+
+On traite le pipeline logiciel.
+
+*** TD 3, Exercice 2, question d
+
+Le code, avec le delayed slot :
+
+#+BEGIN_SRC mips
+  loop:
+	  lbu         $8,0($4)
+	  addu        $8,$8,$5
+	  lbu         $9,0($8)
+	  sb          $9,0($4)
+
+	  addiu       $4,$4,1
+	  bne         $4,$10,loop
+	  nop
+#+END_SRC
+
+On distingue le corps de la boucle des instructions de contrôle de la boucle.
+
+Les trois dernières instructions sont les instructions de contrôle de boucle.
+
+On a un cycle de gel entre lbu et addu, et entre lbu et sb.
+
+Les trois étages du pipeline logiciel seront donc les suivants :
+
+- lbu
+- addu + lbu
+- sb
+
+Réécrivons le code :
+
+#+BEGIN_SRC mips
+
+
+  loop:
+	  sb          $9,-3($4)           # E3(i-2)
+	  addu        $8,$8,$5            # E2(i-1)
+	  lbu         $9,0($8)
+	  lbu         $8,-1($4)           # E1(i)
+
+	  bne         $4,$10,loop         # Suppose une incrémentation du registre $4 dans le prologue
+	  addiu       $4,$4,1
+#+END_SRC
+
+On prendra la peine de rajouter le remplissage, le vidage du pipeline.
+
+*** Exercice 4
+
+[On reprendra ça : pipeline logiciel avec flot de contrôle]
+
+** TD4
+
+*** Exercice 1
+
+**** Question a
+
+Il y a exactement 16 bypass par opérande : les lister est trivial.
+
+**** Question b
+
+Dans quelles situations peut-on avoir un nop* ?
+
+**** Question c
+
+La classe n'a pas aimé mon formalisme. Alors qu'en vrai c'est archi clair.
+
+**** Question d
+
+[à refaire]
+
+[on a fait une espèce de schéma détaillé des registres I_RI (le tampon d'instructions), I_RD, I_RE, I_RM. Pas sûr que ce soit très utile]
+[Pris en photo, à reregarder]
+
+*** Exercice 2
+
+*** Exercice 3
+
+
