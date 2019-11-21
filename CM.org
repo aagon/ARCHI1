@@ -2568,6 +2568,7 @@ Cette mise en place, qui semble contre-intuitive (pourquoi ne pas simplement con
 
 [[./CM7/cache.png][Illustration du cache]]
 
+
 * Annexes
 
 Support de cours :
