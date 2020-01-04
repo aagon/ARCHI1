@@ -1783,3 +1783,86 @@ La classe n'a pas aimé mon formalisme. Alors qu'en vrai c'est archi clair.
 *** Exercice 3
 
 
+* Séance 7 : 26/11/2019
+
+** TD 4
+
+
+* Séance 8 : 03/12/2019
+
+** TD 4, dernier exercice
+
+[ Fait au tableau, à reprendre ]
+
+** TD 5, le cache
+
+[ au papier, à reprendre ]
+[ jusqu'à fin exercice 2 ]
+
+* Séance 9 : 10/12/2019
+
+** Exercice 3
+
+La fréquence du bus est de l'ordre du dixième de la fréquence du processus.
+
+5 à 10 cycles pour que la mémoire trouve la donnée.
+
+Le CPI qui tient compte de ça se calcule de la manière suivante :
+
+CPI_1 = (#cyclesintrinsèques + #cyclessupplémentaireslecture + #cyclessupplémentairesécriture) / (#instructions)
+
+On n'oubliera pas de compter l'instructions fetch dans les lectures.
+
+On tombe sur 12,2 cycles par instructions [refaire le calcul].
+
+C'est lamentable, on va mettre un cache associatif à deux niveaux.
+
+Interlude tampon d'écriture postée (à reprendre).
+
+Après le cache associatif : 2,72
+
+Après le cache de niveau 2 : 1,69
+
+Après le tampon d'écriture postée : 1,39
+
+
+*** Exercice supplémentaire (2008)
+
+Première partie, toute nulle.
+
+La partie sur le cache introduit la notion de Pi-bus.
+
+Le bus est pipeliné.
+
+Un cycle d'arbitrage est obligatoire : le contrôleur de bus va choisir le maître qui a le droit d'écrire.
+
+Puis un cycle d'adresse (l'adresse est envoyée par le maître).
+
+Puis un cycle de données (la donnée est récupérée par le maître).
+
+Un cycle pour mettre à jour le cache.
+
+Un cycle pour répondre au processeur.
+
+
+1 cycle pour détecter le miss : 1
+Obtenir le grant : 6
+On envoie 16 adresses, plus 1 dernier data : 17
+Màj du cache : 1
+Réponse processeur : 1
+
+26 cycles par lecture en cas de miss.
+
+Ecriture :
+Ecrire dans le buffer : 1
+Nombre de cycles pour évacuer une écriture : 1 + 6 + 1 + 1 = 9 cycles
+1 cycle par écriture si le tampon n'est pas plein.
+Si le tampon est plein, ça dépend de quand il sera vide : pas déterministe.
+
+
+96 miss.
+
+On avait 16 cycles par itération.
+
+17,17 cycles par itération à cause des cycles.
+

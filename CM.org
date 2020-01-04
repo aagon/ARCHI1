@@ -2464,9 +2464,6 @@ E = 0.9 * 1 + 0.1 * 10 * 8 = 8.9
 C'est assurément mieux que 1 million, mais c'est encore trop, d'autant plus qu'on a fait une hypothèse assez généreuse sur la proba du cache miss.
 
 
-
-
-
 En élargissant la nappe de fils de la mémoire vers le cache, on réduit énormément le nombre de cycles. Coûte cher, mais très efficace.
 
 Analysons plus précisément les 10 cycles nécessaire pour l'accès à la mémoire : en fait, une partie de ces 10 cycles est due :
@@ -2569,7 +2566,322 @@ Cette mise en place, qui semble contre-intuitive (pourquoi ne pas simplement con
 [[./CM7/cache.png][Illustration du cache]]
 
 
+* Cours 8 : 28/11/2019
+
+Suite de l'organisation du système mémoire.
+
+Taux de miss [définition]
+
+Taux de miss usuel pour les instructions : 2 à 5 %.
+Taux de miss usuel pour les données : 5 à 10 %.
+
+Pour 1/1000 de rapport entre le cache et la mémoire.
+
+
+Les autres types de caches : set associative
+
+*** L'associatif par ensemble de blocs
+
+Si on fait l'hypothèse qu'on a un cache à 8 emplacements, on créé 4 ensembles de deux emplacements chacun.
+
+Chaque bloc peut atterrir non plus dans un emplacement, mais dans n'importe lequel des deux emplacements du même ensemble.
+
+La partition optimale est celle qui éloigne le plus les deux colonnes (à reprendre en français). La distance minimale entre deux 
+
+Une adresse pour le cache sera donc maintenant formatée comme suit :
+
+- Toujours le offset depuis le début du bloc (écrit sur log_2(nombre d'octets du bloc) bits)
+- Un numéro d'ensemble et non plus un numéro d'emplacement (écrit sur log_2(nombre d'ensembles du cache) bits) (un peu moins long)
+- Tag (les bits de poids fort) (un peu plus long maintenant)
+
+Puisque maintenant le cache a un peu de choix sur l'emplacement dans lequel il écrit, on vient d'introduire la nécessité d'une stratégie de remplacement.
+
+le but final : on veut se débarasser du bloc tel que pour une suite arbitraire d'opérations du processeur, le taux de cache miss soit le plus bas possible.
+
+La stratégie FIFO : on vire le plus ancien.
+La stratégie LIFO : on vire le plus nouveau.
+La stratégie LRU : on vire celui qui a été accédé pour la dernière fois il y a plus longtemps.
+
+La dernière stratégie est basée sur la localité temporelle. (le direct mapping ne permet pas de se servir de cette propriété)
+
+[Illustration du principe de localité temporelle, petite distribution]
+
+On a besoin d'un seul bit pour stocker lequel des deux blocs de l'ensemble a 
+
+Puisque on peut avoir deux blocs par ensemble, le matériel change.
+
+On a besoin de deux mémoires directory par ensemble, deux mémoires data.
+
+On a besoin de vérifier, grâce au numéro de tag, lequel des deux blocs nous intéresse.
+
+[photo du matériel]
+
+Un peu plus lent à l'accès.
+
+set associative est le cas général, direct mapping en est un cas particulier.
+
+bits LRU : décrire l'algorithme : complexité de 2^n n le nombre de bits LRU.
+
+Algo simplifié à toujours 1 bit. [décrire]
+
+Tradeoff.
+
+*** Full associative
+
+Cas particulier, où on a un seul ensemble avec tous les emplacements dedans.
+
+** L'origine des miss
+
+Miss compulsif : miss qui vient simplement du premier accès à un bloc.
+Miss de conflit : plusieurs blocs se battent pour le même emplacement.
+Miss de capacité : plusieurs blocs se battent pour l'ensemble des emplacements (plus de place)
+
+Quel taux ?
+
+Quelles solutions ?
+
+Miss compulsif : augmenter la taille des blocs (ou prendre plusieurs blocs, c'est la même chose)
+Miss de conflit : augmenter le degré d'associativité
+Miss de capacité : augmenter la taille du cache
+
+
+** Ecriture dans le cache
+
+Les problèmes de cohérence mémoire.
+
+Plusieurs processeurs, chacun avec son petit cache.
+
+Notion de cohérence :
+
+Cohérence en séquentialité : Si un processeur Pi écrit B à l'adresse @0, puis il lit l'adresse @0, il doit obtenir B.
+
+Cohérence en validité itérative : Si un processeur Pi écrit A à l'adresse @0, si le processeur Pj lit itérativement @0, il doit obtenir A au bout d'un certain temps fini.
+
+Cohérence en ordonnancement itérative : Si Pi écrit A à l'adresse @0, puis il écrit B à l'adresse @0, si Pj lit itérativement @0, il ne peut jamais lire B puis A.
+
+Il existe une solution qui, par construction, respecte la cohérence : l'écriture Write Through. Quand on modifie une donnée de la mémoire, on accède directement à la mémoire primaire, on modifie, et on modifie *en passant* les valeurs de la donnée dans le cache.
+
+Cohérence est respectée, et principe simple.
+Inconvénient est que chaque écriture requiert d'accéder au bus.
+
+Deuxième stratégie possible :
+Write back : On oublie la mémoire primaire, on se contente de modifier la valeur dans le cache. Et on sauvegarde les modifications dans la mémoire centrale au moment où on s'apprête à supprimer.
+
+Accès en écriture sont très rapide.
+Mais la cohérence mémoire n'est plus assurée. (marche probablement quand même quand on a un seul processeur).
+
+Mais un remplacement demande un transfert de deux blocs : on amène l'ancien bloc en mémoire centrale, et on ramène le nouveau en cache.
+
+
+* Cours 9 : 12/12/2019
+
+Retour sur les stratégies d'écriture :
+
+Deux types de cache :
+- Write-through : l'écriture se fait à travers le cache vers la mémoire primaire (si le bloc qu'on veut écrire est présent, on écrit dans le cache en passant) : assure par construction la cohérence de mémoire, même si on admet plusieurs niveaux de cache et de mémoire. Le gros inconvénient c'est que chaque écriture se traduit par un accès au bus.
+
+- Write-back : Consiste à ne pas se préoccuper de ce qui se passe en mémoire, et écrire uniquement dans le cache, et la version dans la mémoire primaire n'est pas mise à jour. On accède peu au bus, seulement quand on remplace le bloc (suppose la présence d'un bit "dirty"). Néanmoins, il faut un mécanisme supplémentaire pour assurer la cohérence.
+
+Pourquoi pas plus de bus : consiste simplement à repousser le problème au niveau des périphériques.
+
+Améliorons les performances de write-through :
+
+1ère idée : mettre une boîte aux lettres dans le cache : le *tampon d'écriture postée*
+
+Le nombre de places dans le tampon d'écritures postées est limité : si on veut lire un bloc, on doit d'abord vérifier si le bloc qu'on veut lire n'est pas dans le tampon d'écriture postée, déjà modifié par une écriture préalable. Il faut donc faire des comparaisons, qui coûtent cher. Donc le nombre de comparaisons doit être limité. Il n'y a que quelques places (1, 2, 4 ou 8) dans le tampon d'écritures postées.
+
+Pour que le processeur ne soit jamais bloqué par les écritures, il faut et il suffit que le débit des store soit inférieur ou égal au débit d'évacuation des écritures du tampon d'écritures postées.
+
+Si on dépasse, des cycles de gel vont être introduits de manière à ralentir le programme, de manière à ralentir le débit des store, qui va coïncider avec le débit d'évacuation.
+
+Cette règle est fixe et doit être maintenue : si on ne la respecte pas, on finira forcément par devoir ralentir le programme. La taille du tampon d'écriture postée n'a d'influence que sur le moment où on va effectivement devoir faire le ralentissement.
+
+Amélioration se voit du point de vue du processeur (pas du bus, le bus reçoit toujours autant de requêtes).
+
+Améliorons Write-Back :
+
+Le coût du miss augmente : je dois d'abord répercuter le bloc du cache dirty dans la mémoire centrale, puis ramener le bloc d'intérêt.
+
+A>>B signifie 1 à 10 ou 1 à 100 (donc on doit quand même essayer de limiter les transferts)
+
+Si on a un bit dirty, on peut effectivement limiter la quantité de transferts sur le bus en les conditionnant à ce que le bit est à 1.
+
+Donc on a deux types de miss : le miss clean, qui coûte un transfert de bloc, et le miss dirty, qui en coûte deux.
+
+
+
+Dans quel cas on préfère le premier ou le deuxième cas :
+
+
+Les critères :
+
+- La distribution temporelle des écritures
+- La distribution spatiale des écritures
+
+Les applications très localisées sont meilleures avec WB, les très délocalisées avec WT.
+
+
+Que faire en cas de miss sur écriture :
+
+Dans le cas du cache WT : si on a choisi WT, c'est que les écritures sont distribuées : pas le coup d'amener le bloc.
+Dans le cas du cache WB : si on a choisi WB, c'est que les écritures sont localisées : vaut le coup de ramener le bloc.
+
+En fait, c'est la localisation qui détermine ET le type de cache d'écriture ET la présence ou non de miss sur écriture.
+
+Problème avec deux processeurs :
+
+On va avoir des problèmes de cohérence avec WB.
+
+Un problème de cohérence en validité itérative [reprendre l'exemple]
+
+On peut rajouter snoopy : il observe le bus.
+
+Il faut informer la mémoire de ce que le bloc qu'elle tient est obsolète. Mais ça, ça coûte une transaction sur le bus. Mais si on écrit sur le même bloc, plus la peine de l'invalider.
+
+Si la bit dirty est à 0 et que je fais une écriture sur le bloc, je dois envoyer invalidation.
+
+Si la bit dirty est à 1 et que je fais une écriture sur le bloc, je n'ai pas besoin d'envoyer invalidation.
+
+Suppose d'ajouter un directory à la mémoire centrale.
+
+Snoopy intervient quand il voit qu'un autre processeur voit ses requêtes rejetées pour cause d'invalidation : c'est moi qui détiens la dernière version de la donnée.
+
+Il lance une transaction de mise à jour de la mémoire. Le bit dirty repasse à 0 et le bit invalidate de la mémoire centrale repasse à 0.
+
+Snoopy est aussi chargé d'invalider sa copie locale de la donnée si il voit une instruction d'invalidation passer dans le bus : c'est le bit de présence qui va passer à 0.
+
+En gros, on parle de l'implémentation en matériel d'un mutex flexible.
+
+Il faut aussi un snoopy dans le cas du WT.
+
+On peut aussi interdire de cacher certains blocs : très simple mais très coûteux.
+
+Les lock se servent de ce dispositif.
+
+Est-ce qu'on a un cache unifié pour les instructions et les données, ou au contraire on a des caches séparés pour les instructions et les données ?
+
+Spontanément, on préfèrerait avoir deux caches séparés : beaucoup plus simple à mettre en place.
+
+Les caches séparés font perdre potentiellement de la place.
+
+
+* Cours 10 : 19/12/2019
+
+Dernier cours sur la hiérarche mémoire.
+
+Liaison entre la mémoire primaire et la mémoire secondaire.
+
+Cache : 1 cycle par accès, quelques Ko à Mo. Taux de miss (cache instructions : 2-3-5 % et cache de données : 5-10 %)
+
+Mémoire centrale : 10 cycles par accès (en vrai un peu plus, genre 40), quelques Mo à Go. Taux de miss (10^-6)
+
+Mémoire secondaire : 10 millions de cycles par accès, quelques Go à quelques To (physique mécanique).
+
+
+Comment fonctionne la liaison entre la mémoire primaire et la mémoire secondaire.
+
+De la même manière que la liasion entre le cache et la mémoire primaire. La mémoire primaire est un cache de la mémoire secondaire.
+
+On doit absolument avoir un taux de miss *TRÈS TRÈS TRÈS* faible (de l'ordre de 10^-6, 10^-5). [reprendre la démonstration]
+
+Comment arriver à cet objectif ? On n'a que la localité spatiale et temporelle.
+
+Localité spatiale, pour être utilisée à son plein potentiel, suppose de prendre des gros blocs (unix standart : 4Ko, linux variable de 4Ko - 1Mo : on appelle ça une page).
+
+Localité temporelle, pour être utilisée à son plein potentiel, suppose d'augmenter l'associativité : il faut faire un cache full associative.
+
+On est obligé d'utiliser WB.
+
+
+Puisqu'on a full associative, quand le processeur demande qqch à la mémoire centrale.
+
+Adresse :
+
+Bits de poids faible donnent le déplacement dans la page.
+
+Bits de poids fort donnent l'étiquette : on n'a pas besoin de nommer un ensemble (on a un seul ensemble). Cet étiquette est l'adresse virtuelle.
+
+L'emplacement physique dans la mémoire centrale donne l'adresse physique.
+
+N'importe quel adresse virtuelle peut aller dans n'importe quelle adresse physique. La correspondance ne peut pas être donnée par un algorithme.
+
+Problème de table associative. On ne va pas s'amuser à scanner toute la mémoire : on doit stocker ces informations quelque part : c'est *la table des pages*.
+
+La table des pages est une espèce de directory de la mémoire.
+
+Le nombre de cases dans la table des pages est le nombre de pages virtuelles (soit 1 Mpage dans notre exemple).
+
+La largeur de la table des pages est de 32 bits (recalculer). (bit de présence, bit dirty, etc...)
+
+Donc la taille de la table des pages est de 4Mo, soit la taille de la mémoire centrale dans notre exemple. C'est nul.
+
+Mais en fait, seule une toute petite proportion des pages dans la table des pages a un bit de présence non 0 (parce qu'il y a très peu de place dans la mémoire centrale).
+
+On dit que la table est *éparse* (*sparse*).
+
+On peut donc facilement se permettre de créer une table hiérarchique. Chaque entrée dans la table des pages maître représentera une quantité fixée de pages virtuelles. Si toutes les pages d'un "paquet" ne sont pas dans la mémoire centrale, et ont donc un bit de présence à 0, nul besoin de les représenter.
+
+La table maître est en fait une table de pointeurs vers un certain ensemble de sous-tables, qui ne sont effectivement représentées que si elles ont de l'information (soit quand au moins un des bits de présence est à 1).
+
+Cette quantité de 1024 pas forcément fixée.
+Plus il y a de niveaux d'indirection, plus on peut se permettre d'avoir une quantité faible, ce qui permettra de bien compacter l'espace que prendra la table des pages.
+
+La taille de la table des pages dépend fondamentalement de la taille de la mémoire secondaire (la taille de l'espace d'adressage en fait), et non pas de la taille de la mémoire primaire, ce qui est fondamentalement débile.
+
+On pourrait faire l'inverse : on ne stocke que des pages physiques dans la table, et dans chaque champ se trouve l'addresse de la page virtuelle que cette page physique représente.
+
+La taille de la table des pages dépend maintenant de la taille de la mémoire primaire et non plus de la taille de l'espace d'adressage.
+
+On a besoin d'une seule table pour l'ensemble des processus de la machine.
+
+Cette table contient donc deux informations : le numéro de page virtuelle, et un identifiant du processus.
+
+Inventé par IBM : AIX.
+
+Maintenant, il faut quand même parcourir cette table à la recherche du bon index :
+
+#+BEGIN_SRC c
+  for (i = 0; i < n; i++)
+	  if ((TPI[i].PV == #PV) && (TPI[i].pid == pid))
+		  break;
+#+END_SRC
+
+La bonne manière, c'est la table de hachage.
+(on va en plus se permettre de cacher les correspondances)
+
+Les adresses du cache sont des adresses physiques. Les adresses de la mémoire centrale sont aussi des adresses phyiques. Les adresses de la mémoire secondaire sont des adresses virtuelles. *Mais* le processeur créé des adresses virtuelles !
+
+Il faut que ces adresses virtuelles soient traduites en adresses physiques, faute de quoi le processeur ne pourrait accéder à son cache.
+
+Ces traductions doivent être faites très vite. Or, s'il faut accéder à la table des pages dans la mémoire centrale, ça ne peut pas être fait en un cycle. En fait, il y a un cache dans le processeur qui garde les correspondances : le TLB, pour *translation lookaside buffer*. Ce cache fonctionne aussi selon le principe de la localité spatiale et la localité temporelle (contient 8, 16, 32 entrées).
+
+Le scénario complet :
+
+Mon processeur créé une adresse virtuelle. De cette addresse, j'enlève les bits de poids faible qui correspondent au déplacement dans la page, pour ne garder que le numéro de page virtuelle. Je donne ce numéro à mon TLB, si tout se passe bien, il me rend un numéro de page physique, je demande la page à mon cache (ou plutôt à la partie de la page qui m'intéresse qui est le bloc), et on a hit ou miss, la suite de l'histoire est connue...
+
+Le scénario moins sympa :
+
+Mon processeur créé une adresse virtuelle. De cette addresse, j'enlève les bits de poids faible qui correspondent au déplacement dans la page, pour ne garder que le numéro de page virtuelle. Je donne ce numéro à mon TLB, et là j'ai un miss. Il faut appliquer l'algorithme de traduction, et donc parcourir la table des pages. Je récupère donc cette adresse physique (si elle est là, bien entendu), que j'enregistre au passage dans mon TLB.
+
+Le processus de traduction à partir du TLB prend quelques centaines de cycles.
+
+Le scénario encore moins sympa :
+
+Mon processeur créé une adresse virtuelle. De cette addresse, j'enlève les bits de poids faible qui correspondent au déplacement dans la page, pour ne garder que le numéro de page virtuelle. Je donne ce numéro à mon TLB, et là j'ai un miss. Il faut appliquer l'algorithme de traduction, et donc parcourir la table des pages. Il se trouve que cette page n'est pas dans la mémoire centrale (*défaut de page*). Il faut donc aller la chercher dans la mémoire secondaire, la ramener en mémoire centrale (évincer si besoin est). On met à jour la table des pages (très important).
+
+
+
+
+
+*(ça suppose que j'ai toujours l'adresse physique de la table des pages)*
+Il y a donc un registre qui stocke cette adresse physique constante.
+
+
+Ce cache doit être implémenté en logiciel (cf. NOYAU)
+
+
 * Annexes
+
 
 Support de cours :
 
