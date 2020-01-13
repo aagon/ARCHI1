@@ -2570,94 +2570,229 @@ Cette mise en place, qui semble contre-intuitive (pourquoi ne pas simplement con
 
 Suite de l'organisation du système mémoire.
 
-Taux de miss [définition]
+On a vu dans la séance précédente la logique et l'implémentation matérielle du cache. On a vu en particulier que le cache n'avait pas tout le temps la donnée demandée, ce qui occasionnait un miss. Se renseigner sur la fréquence de ce phénomène est la première étape pour essayer de l'amoindrir.
 
-Taux de miss usuel pour les instructions : 2 à 5 %.
-Taux de miss usuel pour les données : 5 à 10 %.
+#+BEGIN_DEFINITION
+Taux de miss
 
-Pour 1/1000 de rapport entre le cache et la mémoire.
+Considérons une suite d'instructions processeur arbitraire, et en particulier le sous-ensemble qui font des accès mémoire. Toutes les instructions font un accès mémoire, dans le Instruction Fetch. Un sous-ensemble d'entre-elles font en plus un autre accès mémoire (en lecture ou en écriture) dans l'étage mem.
 
+On a donc deux types d'accès mémoire bien distincts, les accès instructions (un par instruction) et les accès données (0 ou 1 par instruction).
 
-Les autres types de caches : set associative
+Le taux de miss est la proportion de ces instructions qui occasionnent un miss.
+#+END_DEFINITION
 
-*** L'associatif par ensemble de blocs
+Pour les instructions, le taux de miss couramment retenu est autour de 2 à 5%.
+Pour les données, le taux de miss couramment retenu est autour de 5 à 10%.
 
-Si on fait l'hypothèse qu'on a un cache à 8 emplacements, on créé 4 ensembles de deux emplacements chacun.
+Ces valeurs n'ont bien évidemment de sens que pour un rapport de taille bien particulier entre le cache et la mémoire centrale. Plus généralement, entre l'espace des instructions ou données que les instructions sont susceptibles de demander et l'espace dans lequel ces instructions ou données occasionnent un hit.
+
+On a ici un rapport de 1/1000 entre le cache et la mémoire.
+
+On a vu la semaine dernière le cache par direct mapping, voyons maintenant le cache set associative.
+
+*** Le cache associatif par ensemble de blocs
+
+Auparavant, un bloc de la mémoire centrale ne pouvait aller que dans un emplacement bien précis (mapping direct).
+
+On décide maintenant de permettre à un bloc de la mémoire centrale d'aller dans l'un de plusieurs emplacements bien définis.
+
+À titre d'exemple, si on fait l'hypothèse qu'on a un cache à 8 emplacements, on créé 4 ensembles de deux emplacements chacun.
 
 Chaque bloc peut atterrir non plus dans un emplacement, mais dans n'importe lequel des deux emplacements du même ensemble.
 
-La partition optimale est celle qui éloigne le plus les deux colonnes (à reprendre en français). La distance minimale entre deux 
+Les adresses de la mémoire centrale sont donc maintenant distribuées dans des ensembles plus que des emplacements. Auparavant, selon les principes de localité spatiale et temporelle, la partition optimale était celle qui garantissait une distance en adresse minimale entre deux blocs devant aller dans le même emplacement la plus grande possible. Cette contrainte était saturée en mettant cette distance constante identique à la taille du cache en emplacements, très simplement en associant le bloc n à l'emplacement avec lequel il est congruent modulo la taille du cache en emplacements.
 
-Une adresse pour le cache sera donc maintenant formatée comme suit :
+Maintenant, on peut se permettre d'utiliser le même principe, sauf qu'on doit associer le bloc n à l'ensemble avec lequel il est congruent modulo la taille du cache *en ensembles*.
 
-- Toujours le offset depuis le début du bloc (écrit sur log_2(nombre d'octets du bloc) bits)
-- Un numéro d'ensemble et non plus un numéro d'emplacement (écrit sur log_2(nombre d'ensembles du cache) bits) (un peu moins long)
-- Tag (les bits de poids fort) (un peu plus long maintenant)
+À taille constante entre nos deux exemple, puisque la taille du cache en ensembles est inférieure à la taille du cache en emplacements (sinon, c'est juste du direct mapping), la distance minimale entre deux blocs qui vont dans le même ensemble est divisée d'un rapport égal au nombre d'emplacements par ensemble. 
+
+On doit maintenant changer la manière dont les adresses sont écrites.
+
+Pour le cache, elle sera donc maintenant formatée comme suit :
+
+- Toujours l' offset depuis le début du bloc (écrit sur log_2(nombre d'octets du bloc) bits)
+- Un numéro d'ensemble et non plus un numéro d'emplacement (écrit sur log_2(nombre d'ensembles du cache) bits) (maintenant moins long de log_2 le nombre d'emplacements par ensemble)
+- Tag (les bits de poids fort) (maintenant plus long de log_2 le nombre d'emplacements par ensemble)
 
 Puisque maintenant le cache a un peu de choix sur l'emplacement dans lequel il écrit, on vient d'introduire la nécessité d'une stratégie de remplacement.
 
 le but final : on veut se débarasser du bloc tel que pour une suite arbitraire d'opérations du processeur, le taux de cache miss soit le plus bas possible.
+(merci capitaine évident)
 
 La stratégie FIFO : on vire le plus ancien.
 La stratégie LIFO : on vire le plus nouveau.
 La stratégie LRU : on vire celui qui a été accédé pour la dernière fois il y a plus longtemps.
 
-La dernière stratégie est basée sur la localité temporelle. (le direct mapping ne permet pas de se servir de cette propriété)
+La dernière stratégie est basée sur la localité temporelle.
 
-[Illustration du principe de localité temporelle, petite distribution]
+**** Aparté sur la localité temporelle
 
-On a besoin d'un seul bit pour stocker lequel des deux blocs de l'ensemble a 
+L'adresse à laquelle le processeur va demander à accéder peut être modélisé par une variable aléatoire.
 
-Puisque on peut avoir deux blocs par ensemble, le matériel change.
+Le support de cette variable aléatoire est l'ensemble des adresses de la mémoire, gentiment indexées de 0 à N.
 
-On a besoin de deux mémoires directory par ensemble, deux mémoires data.
+On suppose par hypothèse que la fonction de densité de probabilité de (X = x) (X la VAR, x l'index de la mémoire) est constante égale à 1/N.
 
-On a besoin de vérifier, grâce au numéro de tag, lequel des deux blocs nous intéresse.
+Autrement dit, *a priori*, le processeur accède à toutes les adresses de manière équiprobable.
 
-[photo du matériel]
+Maintenant, on peut considérer non plus une probabilité naïve, mais une probabilité conditionnelle.
 
-Un peu plus lent à l'accès.
+La fonction de densité de probabilité de (X_t = x) conditionnée à (X_{t-1} = x_0) sera une espèce de pointe légèrement dissymétrique à droite (pourquoi ? Exercice pour le lecteur...) centrée autour de x_0.
 
-set associative est le cas général, direct mapping en est un cas particulier.
+La fonction de densité de probabilité de (X_t = x) conditionnée à (X_{t-10} = x_0) sera une espèce de montagne légèrement dissymétrique à droite (pourquoi ? Exercice pour le lecteur...) centrée autour de x_0.
 
-bits LRU : décrire l'algorithme : complexité de 2^n n le nombre de bits LRU.
+La fonction de densité de probabilité de (X_t = x) conditionnée à (X_{t-100} = x_0) sera une espèce de colline légèrement dissymétrique à droite (pourquoi ? Exercice pour le lecteur...) centrée autour de x_0.
 
-Algo simplifié à toujours 1 bit. [décrire]
+La fonction de densité de probabilité de (X_t = x) conditionnée à (X_{t-1000000} = x_0) sera probablement indistinguable de la probabilité a priori.
 
-Tradeoff.
+Maintenant, faisons figurer toutes ces courbes sur le même graphique : en abscisses les x les index d'adresses, en ordonnées la probabilité que X_t soit égale à x.
 
-*** Full associative
+Ce dessin illustrera à la fois la notion de localité spatiale et de localité temporelle : 
+- La forme de la courbe, c'est la localité spatiale : on a plus de chance, si on a accédé à l'instruction précédente à x_0, que l'adresse à laquelle on va accéder maintenant soit proche de x_0, plutôt qu'elle en soit éloignée.
+- La dégradation successive des courbes et son retour vers une droite, c'est la localité temporelle. Selon la proximité dans le temps avec laquelle on a accédé à x_0, on a plus ou moins de chance d'y accéder à nouveau maintenant. 
 
-Cas particulier, où on a un seul ensemble avec tous les emplacements dedans.
+**** Retour au cache associatif
+
+Puisqu'on peut avoir deux emplacements par ensemble, le matériel change.
+
+On a besoin de deux mémoires directory et de deux mémoires data.
+
+Maintenant, quand on cherche une adresse, et qu'on sait donc qu'on doit la demander à un ensemble bien précis (il suffit de regarder l'adresse à un endroit bien précis), il faut maintenant vérifier tous les emplacements de cet ensemble (plus unique maintenant) : soit comparer bit à bit le tag de l'adresse avec le tag de l'emplacement correspondant à l'ensemble de l'adresse, dans chaque mémoire directory.
+
+En fait, une mémoire directory stockera la moitié de chacun des ensembles du cache. (de même pour la mémoire data)
+
+On aura donc autant de comparaisons qu'il y a d'emplacements dans chaque ensemble (autrement appelé le *degré d'associativité*).
+
+Un cache set associative est donc un peu plus lent qu'un cache direct mapping. Il compense cette lenteur relative par une diminution CETERIS PARIBUS du taux de miss.
+
+L'implémentation du LRU en matériel est en revanche beaucoup plus coûteuse.
+
+Soit une degré d'associativité n.
+
+Dans un ensemble, on doit stocker l'index de l'accession sur log_2(n) bits. Vu qu'on a n emplacements par ensemble, on doit avoir de quoi stocker n*log_2(n) bits.
+
+À chaque accès mémoire, on doit mettre à jour ces n tableaux de log_2(n) bits.
+
+On doit, en cas d'éviction, chercher l'index le plus élevé.
+
+Tout ça est impossible à implémenter en matériel, surtout si on veut que ça prenne genre un ou deux cycles.
+
+On utilise le principe du LRU simplifié, ou pseudo-LRU, ou plru, qui vient en deux types, le tree-pLRU et le bit-pLRU.
+
+**** bit-pLRU
+
+Pirouz n'a expliqué que le bit-pLRU en cours. On inclut ici le texte d'une réponse stackoverflow. La réponse est de Alain Mérigot, professeur à Paris-Sud (les droits de reproduction de cette réponse peuvent être réservés, et devront toujours mentionner l'auteur original) :
+
+#+BEGIN_QUOTE
+Least recently used means the line with the oldest access time. But keeping track of accesses to always know which one is the oldest may be complex in a cache context. Storing the access order for every block would require at least ceil(log2(n!)) bits, or, most probably, n×log2n bits which is close for n small and much simpler to manage. Whenever a memory reference is accessed, it must be removed from the order list, put at the top and the rest of the list updated. This may be complex to do in one cycle.
+
+This is the reason why pseudo-LRU methods have been developed. They guaranty that an "ancient" line will be ejected, but not that the most ancient will be.
+
+Consider an example for the bit-LRU of your question. We assume that the initial set state is the following.
+
+line    status    real order
+(index) (MRU)
+0       0         3  LRU
+1       1         0  MRU
+2       1         1
+3       0         2
+The real order is not stored, but we will use it to understand the behavior of the algorithm (smallest is youngest).
+
+Now, assume we access existing line 0. Status becomes
+
+line    status    real order
+(index) (MRU)
+0       1         0  MRU
+1       1         1  
+2       1         2
+3       0         3  LRU
+Assume this is followed by a miss, so we apply the method and replace line 3:
+
+Whenever the last remaining 0 bit of a set's status bits is set to 1, all other bits are reset to 0.
+line    status    real order
+(index) (MRU)
+0       0         1  
+1       0         2  
+2       0         3  LRU
+3       1         0  MRU
+So the algorithm has properly ejected LRU (line 3).
+
+Assume that there is another miss. The algorithm states :
+
+At cache misses, the line with lowest index whose MRU-bit is 0 is replaced.
+So line 0 will be replaced. But it is not LRU which is line 2. It is even the "youngest" in the ancient lines. But is has the lowest index.
+To eject another better line would require additional information on the access times.
+Maybe some randomness in the ejection could be simply added. But finding the real LRU is more complex.
+
+Note that there are better ways to have a pseudo LRU. Tree-LRU for instance is much better, but it still does not guaranty that the real LRU will be used.
+For practical applications, pLRU gives a miss rate similar to real LRU, while being much simpler.
+
+But even real LRU may not always be the best policy and if a line has been accessed frequently it is likely that it will continue to be accessed, and it should probably not be replaced even if it is LRU.
+So the most efficient methods extend pLRU by keeping track of the number of accesses and by considering differently lines that are have been accessed only once and lines that have been accessed twice or more. This way, whenever a line has to be ejected, lines that have been accessed only once are preferred.
+#+END_QUOTE
+
+Bien entendu, des fois, on se trouve à évincer une ligne (comme on appelle aussi un bloc apparemment) qui n'est pas la ligne LRU. Mais on n'a besoin que de n bits de stockage, et on a un bit à flip pour chaque accès, et ce indépendemment de n.
+
+Bien évidemment, de temps en temps, on doit aussi flip tous les bits sauf 1. Pirouz avait une autre version, qui consiste à noter la valeur du bit MRU, et à plutôt flip ce bit-là.
+
+Ca requiert un bit à stocker en plus, un peu plus de matériel pour aller chercher la valeur de ce bit pour savoir dans quel sens flip les bits, mais ça doit être un peu plus rapide.
+
+Cette méthode donne des résultats très corrects
+
+**** tree-pLRU
+
+L'autre technique est un peu plus complexe et un peu plus coûteuse en matériel, et prend un peu plus de temps.
+
+On se réfèrera à l'article wikipedia :
+
+#+BEGIN_QUOTE
+The algorithm works as follows: consider a binary search tree for the items in question. Each node of the tree has a one-bit flag denoting "go left to find a pseudo-LRU element" or "go right to find a pseudo-LRU element". To find a pseudo-LRU element, traverse the tree according to the values of the flags. To update the tree with an access to an item N, traverse the tree to find N and, during the traversal, set the node flags to denote the direction that is opposite to the direction taken.
+
+[[./CM8/tree_pLRU.png][Tree-pLRU]]
+#+END_QUOTE
+
+Dans ce cas, on a besoin de 2n-1 bits de stockage pour un degré d'associativité n.
+
+On a besoin de log_2(n) "traversements" par accès mémoire.
+
+Donc ça coûte plus de matériel, c'est un peu plus long, mais le taux de cache miss est apparemment bien meilleur, d'après l'ami Alain Mérigot toujours.
+
+On l'a donc vu, le set associative introduit un certain nombre de problèmes assez difficilement solvables pour passer à l'échelle. C'est un cas conceptuel important, parce que c'est la cas général : le direct mapping est en fait un set associative avec un degré d'associativité égal à 1, et le full associative est en fait un set associative avec un degré d'associativité égal à la taille du cache.
+
+Dans les faits, on a du mal, pour toutes les raisons énoncées plus haut, à dépasser un degré d'associativité de 8 ou 16, même sur les machines modernes.
 
 ** L'origine des miss
 
-Miss compulsif : miss qui vient simplement du premier accès à un bloc.
-Miss de conflit : plusieurs blocs se battent pour le même emplacement.
-Miss de capacité : plusieurs blocs se battent pour l'ensemble des emplacements (plus de place)
+Les miss s'expliquent de trois manières :
 
-Quel taux ?
+- Miss compulsif : miss qui vient simplement du premier accès à un bloc.
+- Miss de conflit : plusieurs blocs se battent pour le même emplacement.
+- Miss de capacité : tout le monde se bat pour la totalité des emplacements.
 
-Quelles solutions ?
+Il y a en fait trois solutions orthogonales à chacun de ces problèmes :
 
-Miss compulsif : augmenter la taille des blocs (ou prendre plusieurs blocs, c'est la même chose)
-Miss de conflit : augmenter le degré d'associativité
-Miss de capacité : augmenter la taille du cache
-
+- Miss compulsif : augmenter la taille des blocs (ou prendre plusieurs blocs, c'est la même chose)
+- Miss de conflit : augmenter le degré d'associativité
+- Miss de capacité : augmenter la taille du cache
 
 ** Ecriture dans le cache
 
-Les problèmes de cohérence mémoire.
+Pour le moment, on n'a considéré que la lecture dans le cache.
 
-Plusieurs processeurs, chacun avec son petit cache.
+Avec les écritures arrivent les problèmes de *cohérence* mémoire.
 
-Notion de cohérence :
+Considérons une situation avec plusieurs processeurs, chacun avec son propre cache.
 
-Cohérence en séquentialité : Si un processeur Pi écrit B à l'adresse @0, puis il lit l'adresse @0, il doit obtenir B.
+#+BEGIN_DEFINITION
+La notion de cohérence se base sur trois critères :
 
-Cohérence en validité itérative : Si un processeur Pi écrit A à l'adresse @0, si le processeur Pj lit itérativement @0, il doit obtenir A au bout d'un certain temps fini.
+Cohérence en séquentialité : Si un processeur P_i écrit B à l'adresse @0, puis il lit l'adresse @0, il doit obtenir B.
 
-Cohérence en ordonnancement itérative : Si Pi écrit A à l'adresse @0, puis il écrit B à l'adresse @0, si Pj lit itérativement @0, il ne peut jamais lire B puis A.
+Cohérence en validité itérative : Si un processeur P_i écrit A à l'adresse @0, si le processeur P_j lit itérativement @0, il doit obtenir A au bout d'un certain temps fini.
+
+Cohérence en ordonnancement itérative : Si P_i écrit A à l'adresse @0, puis il écrit B à l'adresse @0, si Pj lit itérativement @0, il ne peut jamais lire B puis A.
+#+END_DEFINITION
 
 Il existe une solution qui, par construction, respecte la cohérence : l'écriture Write Through. Quand on modifie une donnée de la mémoire, on accède directement à la mémoire primaire, on modifie, et on modifie *en passant* les valeurs de la donnée dans le cache.
 
